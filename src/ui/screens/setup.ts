@@ -29,6 +29,15 @@ function normalizeRows(rows: SetupRowDraft[], count: number, sets: QuestionSet[]
   });
 }
 
+/** UTF-8 우선, 실패하면 CP949(엑셀 기본 'CSV' 저장)로 다시 읽는다 */
+function decodeText(buf: ArrayBuffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder('euc-kr').decode(buf);
+  }
+}
+
 export function createSetupScreen(ctx: Ctx): Screen {
   let state: GameState | null = null;
   let ui: UiState | null = null;
@@ -75,7 +84,9 @@ export function createSetupScreen(ctx: Ctx): Screen {
             h('h3', { class: 'panel__title' }, '1. 문제 데이터'),
             contentInfo,
             h('div', { class: 'panel__row' }, importBtn, fileInput),
-            h('p', { class: 'panel__desc' }, '템플릿: data/content-template.csv'),
+            h('p', { class: 'panel__desc' },
+              h('a', { class: 'link', attrs: { href: './content-template.csv', download: true } }, 'CSV 템플릿 받기'),
+              ' · 작성 방법은 docs/content-guide.md'),
           ),
           h('section', { class: 'panel' },
             h('h3', { class: 'panel__title' }, '2. 팀 수'),
@@ -112,7 +123,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
     fileInput.value = '';
     if (!file) return;
     const dr = draft();
-    const text = await file.text();
+    const text = decodeText(await file.arrayBuffer());
     if (/\.csv$/i.test(file.name)) {
       // CSV는 문자열 그대로 넘기고 해석은 app이 한다
       dr.parseError = null;

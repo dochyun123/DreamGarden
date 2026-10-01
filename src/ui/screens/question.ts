@@ -142,8 +142,9 @@ export function createQuestionScreen(ctx: Ctx): Screen {
           choices.replaceChildren();
         }
       }
-      // 이전 runId의 잠금은 버린다 (오답 후 같은 문제 재도전, Undo 복원)
-      if (ctx.local.lock && ctx.local.lock.runId !== p.runId) ctx.local.lock = null;
+      // 클릭 잠금은 다음 render까지만 유지한다. app이 selectChoice를 동기로 commit+render하므로
+      // 연타는 phase로 막히고, 거부된 선택(저장 실패 등)은 여기서 풀려 다시 고를 수 있다.
+      ctx.local.lock = null;
       applyChoiceState();
 
       setClasses(fab, { 'is-alert': u.animationStuck, 'has-notice': !!u.notice && !u.animationStuck });

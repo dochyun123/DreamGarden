@@ -60,7 +60,8 @@ body { overflow: hidden; }
 @keyframes screen-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
 /* 연출 오버레이 호스트 — 플레이어가 자식 요소에 pointer-events를 직접 지정 */
-.anim-host { position: absolute; inset: 0; z-index: 50; pointer-events: none; }
+/* container-type: 연출의 cqw/cqh가 뷰포트가 아니라 1920×1080 스테이지 기준이 되도록 */
+.anim-host { position: absolute; inset: 0; z-index: 50; pointer-events: none; container-type: size; }
 .layer-overlay { position: absolute; inset: 0; z-index: 80; pointer-events: none; }
 .layer-overlay > * { pointer-events: auto; }
 
@@ -608,3 +609,5 @@ select.field { font-size: 24px; font-weight: var(--fw-regular); cursor: pointer;
 .page > .notice { margin-bottom: 28px; }
 .sheet > .notice, .sheet > div > .notice { margin: 0; }
 .sheet .panel { padding: 22px 28px; gap: 12px; }
+.link { color: var(--c-highlight); font-weight: var(--fw-bold); text-decoration: underline; text-underline-offset: 4px; }
+.link:hover { color: #fff; }

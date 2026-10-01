@@ -100,6 +100,15 @@ export const CSS = `
 .ap-heaven .ap-big{color:#FFE27B;-webkit-text-stroke-color:#7A4B00;font-size:15cqh;animation:ap-pop .6s cubic-bezier(.2,1.6,.4,1) both}
 .ap-heaven .ap-sub{color:#2D2B4D;text-shadow:0 0 1.5cqh #fff}
 
+/* 저사양 모드 (?lite=1): 큰 필터·블렌딩·무한 회전 제거 */
+.ap-lite .ap-fire{filter:none;mix-blend-mode:normal}
+.ap-lite .ap-flame{background:radial-gradient(ellipse at 50% 85%,#FFC93C 0%,#FF7A1A 45%,rgba(255,61,0,.85) 68%,transparent 72%)}
+.ap-lite .ap-ember{box-shadow:none}
+.ap-lite .ap-beam{mix-blend-mode:normal}
+.ap-lite .ap-rays.on{animation:ap-rays-in 1s ease-out both}
+.ap-lite .ap-sparkle{animation-iteration-count:2}
+.ap-lite .ap-big{filter:none;text-shadow:0 1.2cqh 0 rgba(0,0,0,.45)}
+
 @keyframes ap-fade-in{from{opacity:0}to{opacity:1}}
 @keyframes ap-fade-out{from{opacity:1}to{opacity:0}}
 @keyframes ap-flash{0%{opacity:0}15%{opacity:1}100%{opacity:.35}}
