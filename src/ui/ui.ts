@@ -1,12 +1,13 @@
 // 담당: dream-f4 — 시작, 초기 설정, 팀 선택, 문제, 리더보드, 관리 화면.
 // UI는 상태를 직접 바꾸지 않는다. render()로 받은 상태를 그리고, 사용자 행동은 actions 호출로만 전달한다.
 import type { GameState, ValidationIssue } from '../types';
-import type { TeamDraft } from '../core/engine';
+import { lastUndoLabel, type TeamDraft } from '../core/engine';
 import './tokens.css';
 import './ui.css';
 import type { Ctx, LocalUi, Screen } from './context';
 import { h } from './dom';
 import { brand } from './brand';
+import { ginkgoLeafIcon, mapleLeafIcon, undoIcon } from './icons';
 import { createStartScreen } from './screens/start';
 import { createSetupScreen } from './screens/setup';
 import { createQuestionScreen } from './screens/question';
@@ -56,6 +57,38 @@ export interface UiHandle {
   render(state: GameState, ui: UiState): void;
   /** 연출 오버레이가 붙을 요소 (16:9 스테이지 내부) */
   animationHost: HTMLElement;
+}
+
+/** 낙엽: [left %, 낙하 시간 s, 시작 지연 s, 크기 px, 모양, 색, 종류]
+ *  edge = 문제 화면에서도 남는 가장자리 잎, start = 시작 화면에만 */
+type LeafSpec = [number, number, number, number, 'maple' | 'ginkgo', 'maple' | 'red' | 'ginkgo', 'edge' | 'normal' | 'start'];
+const LEAVES: LeafSpec[] = [
+  [2.5, 30, -4, 37, 'maple', 'maple', 'edge'],
+  [96.5, 34, -15, 32, 'ginkgo', 'ginkgo', 'edge'],
+  [1, 38, -24, 28, 'maple', 'red', 'edge'],
+  [14, 26, -8, 40, 'ginkgo', 'ginkgo', 'normal'],
+  [27, 31, -19, 49, 'maple', 'red', 'normal'],
+  [52, 28, -2, 38, 'maple', 'maple', 'normal'],
+  [68, 35, -11, 43, 'ginkgo', 'ginkgo', 'normal'],
+  [83, 27, -20, 46, 'maple', 'red', 'normal'],
+  [40, 33, -26, 35, 'ginkgo', 'ginkgo', 'normal'],
+  [8, 20, -6, 68, 'maple', 'maple', 'start'],
+  [21, 23, -14, 51, 'ginkgo', 'ginkgo', 'start'],
+  [60, 19, -3, 65, 'maple', 'red', 'start'],
+  [76, 24, -17, 54, 'ginkgo', 'ginkgo', 'start'],
+  [90, 21, -9, 71, 'maple', 'maple', 'start'],
+  [46, 25, -12, 51, 'maple', 'maple', 'start'],
+];
+
+function createLeaves(): HTMLElement {
+  return h('div', { class: 'leaves', attrs: { 'aria-hidden': 'true' } },
+    LEAVES.map(([x, d, delay, size, shape, color, kind]) =>
+      h('span', {
+        class: `leaf leaf--${kind}`,
+        style: { '--x': `${x}%`, '--d': `${d}s`, '--delay': `${delay}s`, '--s': `${size}px`, '--leaf-color': `var(--c-leaf-${color})` },
+      }, shape === 'maple' ? mapleLeafIcon() : ginkgoLeafIcon()),
+    ),
+  );
 }
 
 const STAGE_W = 1920;
@@ -157,7 +190,14 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
   /** 연출 오버레이 — 화면 위, 관리 메뉴 아래 */
   const animationHost = h('div', { class: 'anim-host' });
   const overlay = h('div', { class: 'layer-overlay' });
-  stage.append(screenLayer, animationHost, overlay);
+  const modalLayer = h('div', { class: 'layer-overlay layer-modal' });
+  /** 오른쪽 위 ↶ 되돌리기 — 연출(z50)과 관리 메뉴(z80) 위, 확인 모달(z95) 아래 */
+  const undoBtn = h('button', {
+    class: 'undo-fab',
+    attrs: { type: 'button', 'aria-label': '되돌리기' },
+    on: { click: () => { if (!undoBtn.disabled) actions.undo(); } },
+  }, undoIcon());
+  stage.append(createLeaves(), screenLayer, animationHost, overlay, undoBtn, modalLayer);
   root.replaceChildren(stage);
 
   // 16:9 비율 유지 — 남는 영역은 .ui-root 배경
@@ -224,8 +264,13 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     if (confirmModal && confirmModal.key !== confirmKey) { confirmModal.el.remove(); confirmModal = null; }
     if (confirm && !confirmModal) {
       confirmModal = { key: confirmKey, el: createConfirmModal(ctx, confirm) };
-      overlay.append(confirmModal.el);
+      modalLayer.append(confirmModal.el);
     }
+
+    const label = lastUndoLabel(state);
+    undoBtn.hidden = !ui.started || key === 'setup' || key === 'start';
+    undoBtn.disabled = !label;
+    undoBtn.title = label ? `되돌리기: ${label}` : '되돌릴 행동이 없습니다';
 
     stage.classList.toggle('is-paused', ui.adminMenuOpen);
     stage.dataset.view = key === 'tabs' ? ui.view : key;

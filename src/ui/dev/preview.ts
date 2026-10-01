@@ -37,6 +37,9 @@ let state: GameState = {
   ],
   undoHistory: [],
 };
+if (state.progress) {
+  state.undoHistory = [{ label: '은혜팀 2번 문제에 1번 선택', snapshot: { teams: state.teams, progress: state.progress, results: state.results } }];
+}
 
 if (screen === 'long') {
   const set = structuredClone(content.questionSets[3]);

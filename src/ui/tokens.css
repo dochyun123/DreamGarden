@@ -1,33 +1,52 @@
 /* 담당: dream-f4 — 디자인 토큰. 색·글자·간격은 여기서만 바꾼다.
    기준: 1920×1080 스테이지 (px 값은 스테이지 좌표 기준, 실제 화면에서는 transform scale) */
 :root {
-  /* 색상 — 기획서 4장 시안 */
-  --c-bg: #17162e;
-  --c-bg-deep: #0e0d1f;          /* 스테이지 바깥 여백 */
-  --c-surface: #2d2b4d;          /* 보기·카드 */
-  --c-surface-raised: #3a3763;   /* hover */
-  --c-surface-sunken: #221f3d;
-  --c-border: #5a5690;           /* 분명한 외곽선 */
-  --c-border-strong: #8d86d9;
-  --c-accent: #7664e8;           /* 번호·주요 버튼 */
-  --c-accent-strong: #8f80ff;
-  --c-highlight: #ffe27b;        /* 빈칸·선택 강조 */
-  --c-text: #ffffff;
-  --c-text-dim: #b9b5e0;
-  --c-text-faint: #7f7aab;
-  --c-heart: #ff5c7a;
-  --c-heart-empty: #4a4870;
-  --c-success: #4fd1a5;
-  --c-danger: #ff4d6d;          /* 오답 */
-  --c-correct: #ffe27b;         /* 정답 = 노랑 */
-  --c-correct-edge: #ffb800;
-  --c-warning: #ffb347;
-  --c-scrim: rgba(8, 7, 20, 0.72);
+  /* 색상 — 가을 팔레트 (리드 확정). 변수 이름은 시안 때와 같고 값만 가을색 */
+  --c-bg: #1e1410;               /* 진한 호두색 */
+  --c-bg-top: #2b1a12;           /* 스테이지 위쪽 그라데이션 */
+  --c-bg-deep: #120c09;          /* 스테이지 바깥 여백 */
+  --c-surface: #3a261a;          /* 보기·카드 */
+  --c-surface-raised: #4a3122;   /* hover */
+  --c-surface-sunken: #2a1b13;
+  --c-surface-selected: #553722;
+  --c-border: #6b4a33;           /* 분명한 외곽선 */
+  --c-border-strong: #a07454;
+  --c-accent: #d9682b;           /* 번호·주요 버튼 (호박 주황) */
+  --c-accent-strong: #ec7d3e;
+  --c-highlight: #ffcf6b;        /* 빈칸·선택·'암송' 강조 (황금빛) */
+  --c-on-highlight: #2a1a08;     /* 강조색 위 글자 */
+  --c-text: #fff4e6;             /* 크림색 본문 */
+  --c-text-dim: #dcc6ae;
+  --c-text-faint: #9f846c;
+  --c-heart: #e2553b;            /* 단풍 빨강 */
+  --c-heart-empty: #5a3e2e;
+  --c-success: #8fa35b;          /* 클리어 (올리브) */
+  --c-danger: #c8442f;           /* 오답·탈락 */
+  --c-correct: #ffcf6b;          /* 정답 = 황금빛 */
+  --c-correct-edge: #e8a43a;
+  --c-warning: #f0a542;
+  --c-on-warning: #2a1600;
+  --c-glow: rgba(255, 170, 90, 0.55);
+  --c-scrim: rgba(18, 10, 6, 0.72);
 
-  /* 무대 조명 (정적 그라디언트 — 문제 읽는 동안 움직임 최소화) */
-  --light-spot-a: rgba(118, 100, 232, 0.28);
-  --light-spot-c: rgba(179, 168, 255, 0.16);
-  --light-spot-b: rgba(255, 226, 123, 0.08);
+  /* 관리 콘솔 — 같은 계열을 채도만 낮춘 차분한 운영자 톤 */
+  --c-console-bg: #251912;
+  --c-console-surface: #2e2018;
+  --c-console-hover: #3a2a1f;
+  --c-console-line: #3a2a1f;
+  --c-console-line-strong: #54402f;
+  --c-console-text: #efe3d4;
+  --c-console-dim: #a8927e;
+
+  /* 무대 조명 — 따뜻한 호박빛 (정적 그라디언트, 문제 읽는 동안 움직임 최소화) */
+  --light-spot-a: rgba(255, 170, 90, 0.15);
+  --light-spot-c: rgba(255, 190, 120, 0.10);
+  --light-spot-b: rgba(255, 207, 107, 0.07);
+
+  /* 낙엽 장식 */
+  --c-leaf-maple: #d9682b;
+  --c-leaf-red: #b8452c;
+  --c-leaf-ginkgo: #e8b04a;
 
   /* 글꼴 */
   /* 자체 호스팅(src/main.ts에서 @fontsource 로드). 오프라인 폴백 포함 */
@@ -51,6 +70,8 @@
   --fs-body: 32px;
   --fs-small: 26px;
   --fs-tab: 34px;
+  --fs-console: 24px;
+  --fs-console-small: 22px;
 
   /* 간격·모양 */
   --stage-w: 1920px;
@@ -64,8 +85,8 @@
   --radius-s: 12px;
   --border-w: 3px;
   --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
-  --glow-accent: 0 0 0 4px rgba(143, 128, 255, 0.35), 0 0 36px rgba(118, 100, 232, 0.55);
-  --glow-highlight: 0 0 0 4px rgba(255, 226, 123, 0.35), 0 0 40px rgba(255, 226, 123, 0.45);
+  --glow-accent: 0 0 0 4px rgba(236, 125, 62, 0.35), 0 0 36px rgba(217, 104, 43, 0.5);
+  --glow-highlight: 0 0 0 4px rgba(255, 207, 107, 0.35), 0 0 40px rgba(255, 207, 107, 0.4);
 
   --t-fast: 120ms;
   --t-med: 240ms;
