@@ -1,8 +1,11 @@
 // 담당: dream-20 — 정오 판정, 목숨·통과 수, 상태 전이, Undo 스냅샷.
 // 모든 함수는 순수 함수: 입력 state를 변경하지 않고 새 state를 반환한다.
 // 허용되지 않는 동작(잘못된 phase, 완료 팀 선택 등)은 state를 그대로 반환한다(throw 금지).
+import {
+  QUESTIONS_PER_SET, SCHEMA_VERSION, STARTING_LIVES,
+} from '../types';
 import type {
-  AnimationKind, ContentFile, GameState, Phase, Question,
+  AnimationKind, ContentFile, GameSnapshot, GameState, Phase, Question, Team,
 } from '../types';
 
 export interface TeamDraft {
@@ -12,26 +15,61 @@ export interface TeamDraft {
 
 /** 빈 게임 상태. 팀 없음. */
 export function createInitialState(content: ContentFile): GameState {
-  void content;
-  throw new Error('TODO(dream-20)');
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    contentVersion: content.contentVersion,
+    questionSets: clone(content.questionSets),
+    teams: [],
+    progress: null,
+    results: [],
+    undoHistory: [],
+  };
 }
 
 /** 문제 데이터 교체. progress가 있거나 results가 있으면 거부(그대로 반환). 팀의 questionSetId는 유지. */
 export function replaceContent(state: GameState, content: ContentFile): GameState {
-  void content;
-  return state;
+  if (state.progress || state.results.length > 0) return state;
+  return {
+    ...state,
+    contentVersion: content.contentVersion,
+    questionSets: clone(content.questionSets),
+    undoHistory: [],
+  };
 }
 
 /** 팀 등록/재구성. progress·results가 비어 있을 때만 허용. id는 "team-1".. 순서대로. Undo 이력 초기화. */
 export function registerTeams(state: GameState, drafts: TeamDraft[]): GameState {
-  void drafts;
-  return state;
+  if (state.progress || state.results.length > 0) return state;
+  const teams: Team[] = drafts.map((d, i) => ({
+    id: `team-${i + 1}`,
+    name: d.name.trim(),
+    questionSetId: d.questionSetId,
+    status: 'notStarted',
+  }));
+  return { ...state, teams, undoHistory: [] };
 }
 
 /** 미도전 팀 도전 시작. 다른 팀이 진행 중이면 거부. 시작 전 스냅샷을 undo에 쌓는다. lives=3, passed=0, phase=awaitingAnswer, runId+1 */
 export function startChallenge(state: GameState, teamId: string): GameState {
-  void teamId;
-  return state;
+  if (state.progress) return state;
+  const team = state.teams.find((t) => t.id === teamId);
+  if (!team || team.status !== 'notStarted') return state;
+  const set = state.questionSets.find((s) => s.id === team.questionSetId);
+  if (!set || set.questions.length !== QUESTIONS_PER_SET) return state;
+
+  return {
+    ...pushUndo(state, `${team.name} 도전 시작`),
+    teams: state.teams.map((t) => (t.id === teamId ? { ...t, status: 'inProgress' } : t)),
+    progress: {
+      activeTeamId: teamId,
+      questionIndex: 0,
+      lives: STARTING_LIVES,
+      passedCount: 0,
+      phase: 'awaitingAnswer',
+      selectedChoiceId: null,
+      runId: maxKnownRunId(state) + 1,
+    },
+  };
 }
 
 /**
@@ -40,8 +78,47 @@ export function startChallenge(state: GameState, teamId: string): GameState {
  * 마지막 판정(5번째 정답 또는 목숨 0)이면 team.status=completed, results에 기록 추가까지 이 시점에 한다.
  */
 export function selectChoice(state: GameState, choiceId: string): GameState {
-  void choiceId;
-  return state;
+  const progress = state.progress;
+  if (!progress || progress.phase !== 'awaitingAnswer') return state;
+  const question = getCurrentQuestion(state);
+  if (!question) return state;
+  const choiceIndex = question.choices.findIndex((c) => c.id === choiceId);
+  if (choiceIndex < 0) return state;
+  const team = state.teams.find((t) => t.id === progress.activeTeamId);
+  if (!team) return state;
+
+  const label = `${team.name} ${progress.questionIndex + 1}번 문제에 ${choiceIndex + 1}번 선택`;
+  const isCorrect = choiceId === question.correctChoiceId;
+  const passedCount = isCorrect ? progress.passedCount + 1 : progress.passedCount;
+  const lives = isCorrect ? progress.lives : Math.max(0, progress.lives - 1);
+  const finished = isCorrect ? passedCount >= QUESTIONS_PER_SET : lives === 0;
+
+  const next: GameState = {
+    ...pushUndo(state, label),
+    progress: {
+      ...progress,
+      passedCount,
+      lives,
+      phase: isCorrect ? 'correct' : 'wrong',
+      selectedChoiceId: choiceId,
+      runId: progress.runId + 1,
+    },
+  };
+  if (!finished) return next;
+
+  return {
+    ...next,
+    teams: state.teams.map((t) => (t.id === team.id ? { ...t, status: 'completed' } : t)),
+    results: [
+      ...state.results,
+      {
+        teamId: team.id,
+        passedCount,
+        outcome: isCorrect ? 'clear' : 'failed',
+        completedAt: new Date().toISOString(),
+      },
+    ],
+  };
 }
 
 /**
@@ -53,38 +130,107 @@ export function selectChoice(state: GameState, choiceId: string): GameState {
  * 단계가 바뀔 때 runId+1.
  */
 export function completeAnimation(state: GameState, runId: number): GameState {
-  void runId;
-  return state;
+  const progress = state.progress;
+  if (!progress || progress.runId !== runId) return state;
+
+  const moveTo = (phase: Phase, questionIndex = progress.questionIndex): GameState => ({
+    ...state,
+    progress: {
+      ...progress,
+      phase,
+      questionIndex,
+      selectedChoiceId: phase === 'awaitingAnswer' ? null : progress.selectedChoiceId,
+      runId: progress.runId + 1,
+    },
+  });
+
+  switch (progress.phase) {
+    case 'awaitingAnswer':
+      return state;
+    case 'correct':
+      return progress.passedCount >= QUESTIONS_PER_SET
+        ? moveTo('heaven')
+        : moveTo('awaitingAnswer', Math.min(progress.questionIndex + 1, QUESTIONS_PER_SET - 1));
+    case 'wrong':
+      return progress.lives > 0 ? moveTo('awaitingAnswer') : moveTo('inferno');
+    case 'heaven':
+    case 'inferno':
+      return { ...state, progress: null };
+  }
 }
 
 /** 새로고침 후 이어하기: runId만 +1 (현재 phase의 연출을 처음부터 다시 재생하도록). */
 export function resumeRun(state: GameState): GameState {
-  return state;
+  if (!state.progress) return state;
+  return { ...state, progress: { ...state.progress, runId: state.progress.runId + 1 } };
 }
 
 /** 직전 행동 되돌리기. 스냅샷 복원 + runId는 (기존 runId+1)로 설정해 진행 중 연출 신호를 무효화. 복원된 phase가 연출 단계면 awaitingAnswer 직전 상태가 스냅샷이므로 그대로 사용. */
 export function undo(state: GameState): GameState {
-  return state;
+  const entry = state.undoHistory[state.undoHistory.length - 1];
+  if (!entry) return state;
+  const { teams, progress, results } = clone(entry.snapshot);
+  return {
+    ...state,
+    teams,
+    // 진행이 끝나 progress가 null이어도 runId가 과거 값으로 되돌아가지 않도록 알려진 최대값보다 크게 한다.
+    progress: progress ? { ...progress, runId: maxKnownRunId(state) + 1 } : null,
+    results,
+    undoHistory: state.undoHistory.slice(0, -1),
+  };
 }
 
 /** 관리 메뉴용 "마지막 행동 요약". 없으면 null. */
 export function lastUndoLabel(state: GameState): string | null {
-  void state;
-  return null;
+  return state.undoHistory[state.undoHistory.length - 1]?.label ?? null;
 }
 
 /** 전체 기록 초기화: progress·results·undo 제거, 모든 팀 notStarted. 팀명·문제 연결 유지. */
 export function resetRecords(state: GameState): GameState {
-  return state;
+  return {
+    ...state,
+    teams: state.teams.map((t) => ({ ...t, status: 'notStarted' })),
+    progress: null,
+    results: [],
+    undoHistory: [],
+  };
 }
 
 /** 현재 화면에 보여줄 문제. progress 없으면 null. */
 export function getCurrentQuestion(state: GameState): Question | null {
-  void state;
-  return null;
+  const progress = state.progress;
+  if (!progress) return null;
+  const team = state.teams.find((t) => t.id === progress.activeTeamId);
+  const set = team && state.questionSets.find((s) => s.id === team.questionSetId);
+  return set?.questions[progress.questionIndex] ?? null;
 }
 
 /** phase에 해당하는 연출. awaitingAnswer면 null. */
 export function animationForPhase(phase: Phase): AnimationKind | null {
   return phase === 'awaitingAnswer' ? null : phase;
+}
+
+// ───────── 내부 도우미 ─────────
+
+function pushUndo(state: GameState, label: string): GameState {
+  const snapshot: GameSnapshot = clone({
+    teams: state.teams,
+    progress: state.progress,
+    results: state.results,
+  });
+  return { ...state, undoHistory: [...state.undoHistory, { label, snapshot }] };
+}
+
+/** 현재 진행과 Undo 이력에 남은 runId 중 최대값. progress가 null이 된 뒤에도 runId를 단조 증가시키기 위해 쓴다. */
+function maxKnownRunId(state: GameState): number {
+  let max = state.progress?.runId ?? 0;
+  for (const entry of state.undoHistory) {
+    const runId = entry.snapshot.progress?.runId;
+    if (runId !== undefined && runId > max) max = runId;
+  }
+  return max;
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
