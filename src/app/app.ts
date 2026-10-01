@@ -1,6 +1,7 @@
 // 담당: dream-3c (리드) — 모듈 연결, UiState 관리, 연출 재생 루프, 저장 호출.
 import sampleContent from '../../data/sample-content.json';
 import { createAnimationPlayer } from '../animation/player';
+import { parseContentCsv } from '../content/csv';
 import { parseContentFile, validateTeamDrafts } from '../content/validator';
 import * as engine from '../core/engine';
 import { createGameStorage, type GameStorage } from '../storage/storage';
@@ -57,7 +58,8 @@ export function bootstrap(root: HTMLElement): void {
       update();
     },
     importContent(json) {
-      const { content, issues } = parseContentFile(json);
+      // UI는 .csv 파일을 텍스트 그대로, .json 파일은 파싱한 객체로 넘긴다
+      const { content, issues } = typeof json === 'string' ? parseContentCsv(json) : parseContentFile(json);
       ui.issues = issues;
       if (content) {
         const next = engine.replaceContent(state, content);
