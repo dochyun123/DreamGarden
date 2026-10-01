@@ -27,9 +27,13 @@ export function bootstrap(root: HTMLElement): void {
     isFullscreen: false,
   };
 
-  /** 현재 재생 중인 연출의 runId (없으면 null) */
-  let playingRunId: number | null = null;
+  /** 현재 재생 중인 연출 (없으면 null). token은 play 호출마다 고유 — 같은 runId 재재생 시 이전 콜백 구분용 */
+  let playing: { token: number; runId: number } | null = null;
+  let nextToken = 0;
+  let playerPaused = false;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
+  /** 저장 실패 상태. 저장이 다시 성공할 때까지 notice 유지 */
+  let saveFailed = false;
 
   const actions: UiActions = {
     start() {
@@ -68,19 +72,13 @@ export function bootstrap(root: HTMLElement): void {
       if (issues.length === 0) {
         const next = engine.registerTeams(state, drafts);
         if (next === state) ui.notice = '진행 중이거나 기록이 있으면 팀 구성을 바꿀 수 없습니다.';
-        else {
-          commit(next);
-          ui.view = 'teams';
-        }
+        else if (commit(next)) ui.view = 'teams';
       }
       update();
     },
     startChallenge(teamId) {
       const next = engine.startChallenge(state, teamId);
-      if (next !== state) {
-        commit(next);
-        ui.view = 'question';
-      }
+      if (next !== state && commit(next)) ui.view = 'question';
       update();
     },
     selectChoice(choiceId) {
@@ -97,9 +95,9 @@ export function bootstrap(root: HTMLElement): void {
       update();
     },
     undo() {
-      cancelAnimation();
       const next = engine.undo(state);
       if (next !== state) {
+        cancelAnimation();
         commit(next);
         if (state.progress) ui.view = 'question';
         else if (ui.view === 'question') ui.view = 'teams';
@@ -119,8 +117,7 @@ export function bootstrap(root: HTMLElement): void {
     },
     resetRecords() {
       cancelAnimation();
-      commit(engine.resetRecords(state));
-      ui.view = 'teams';
+      if (commit(engine.resetRecords(state))) ui.view = 'teams';
       update();
     },
   };
@@ -138,16 +135,26 @@ export function bootstrap(root: HTMLElement): void {
 
   // ───────── 내부 ─────────
 
-  /** 새 상태 반영 + 저장. 저장 실패 시 관리 메뉴를 열어 진행을 멈추고 알린다. */
-  function commit(next: GameState): void {
-    if (next === state) return;
-    state = next;
+  /**
+   * 새 상태 반영 + 저장. 성공하면 true.
+   * 저장 실패 시 이전 상태로 되돌리고(메모리와 저장소 불일치 방지) 관리 메뉴를 열어 진행을 멈춘다.
+   */
+  function commit(next: GameState): boolean {
+    if (next === state) return true;
     try {
-      storage.save(state);
+      storage.save(next);
     } catch (err) {
-      ui.notice = `저장에 실패했습니다. 진행을 멈췄습니다. (${err instanceof Error ? err.message : String(err)})`;
+      saveFailed = true;
+      ui.notice = `저장에 실패해 마지막 행동을 반영하지 않고 진행을 멈췄습니다. 원인을 해결한 뒤 다시 시도하세요. (${err instanceof Error ? err.message : String(err)})`;
       ui.adminMenuOpen = true;
+      return false;
     }
+    state = next;
+    if (saveFailed) {
+      saveFailed = false;
+      ui.notice = null;
+    }
+    return true;
   }
 
   function update(): void {
@@ -163,27 +170,29 @@ export function bootstrap(root: HTMLElement): void {
     const paused = !ui.started || ui.adminMenuOpen || ui.view !== 'question';
 
     if (!progress || !kind) {
-      if (playingRunId !== null) cancelAnimation();
+      if (playing) cancelAnimation();
       return;
     }
-    if (playingRunId === progress.runId) {
-      if (paused) player.pause();
-      else player.resume();
+    if (playing?.runId === progress.runId) {
+      if (paused && !playerPaused) {
+        player.pause();
+        clearTimeout(watchdog); // 일시정지 중에는 '멈춤' 판정하지 않음
+      } else if (!paused && playerPaused) {
+        player.resume();
+        armWatchdog(playing.token);
+      }
+      playerPaused = paused;
       return;
     }
-    if (playingRunId !== null) cancelAnimation();
+    if (playing) cancelAnimation();
     if (paused) return; // 메뉴를 닫거나 문제 화면으로 돌아오면 재생
 
     const runId = progress.runId;
+    const token = ++nextToken;
     const team = state.teams.find((t) => t.id === progress.activeTeamId);
-    playingRunId = runId;
-    clearTimeout(watchdog);
-    watchdog = setTimeout(() => {
-      if (playingRunId === runId) {
-        ui.animationStuck = true;
-        handle.render(state, ui);
-      }
-    }, ANIMATION_WATCHDOG_MS);
+    playing = { token, runId };
+    playerPaused = false;
+    armWatchdog(token);
 
     void player
       .play(kind, {
@@ -192,8 +201,8 @@ export function bootstrap(root: HTMLElement): void {
         livesAfter: progress.lives,
       })
       .then((reason) => {
-        if (playingRunId !== runId) return; // 이미 다른 연출로 대체됨
-        playingRunId = null;
+        if (playing?.token !== token) return; // 취소됐거나 다른 재생으로 대체됨
+        playing = null;
         clearTimeout(watchdog);
         ui.animationStuck = false;
         if (reason === 'cancelled') return;
@@ -203,8 +212,19 @@ export function bootstrap(root: HTMLElement): void {
       });
   }
 
+  /** 재생(또는 재개) 시점부터 일정 시간 안에 끝나지 않으면 관리자에게 건너뛰기를 강조 */
+  function armWatchdog(token: number): void {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      if (playing?.token === token) {
+        ui.animationStuck = true;
+        handle.render(state, ui);
+      }
+    }, ANIMATION_WATCHDOG_MS);
+  }
+
   function cancelAnimation(): void {
-    playingRunId = null;
+    playing = null;
     clearTimeout(watchdog);
     ui.animationStuck = false;
     player.cancel();
