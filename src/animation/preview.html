@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>연출 미리보기</title>
+    <!-- 개발용: npm run dev 후 /src/animation/preview.html 로 열어 연출만 확인 -->
+    <style>
+      body { margin: 0; background: #000; font-family: sans-serif; color: #fff; }
+      #bar { display: flex; gap: 8px; padding: 8px; flex-wrap: wrap; }
+      #bar button { font-size: 16px; padding: 6px 12px; }
+      #stage { position: relative; width: 960px; height: 540px; background: #17162E; overflow: hidden; }
+      #stage .mock { position: absolute; inset: 0; display: grid; place-items: center; font-size: 40px; color: #FFE27B; }
+    </style>
+  </head>
+  <body>
+    <div id="bar">
+      <button data-k="correct">정답</button>
+      <button data-k="wrong">오답(3→2)</button>
+      <button data-k="wrong0">오답(1→0)</button>
+      <button data-k="inferno">불구덩이</button>
+      <button data-k="heaven">천국</button>
+      <button id="pause">일시정지/재개</button>
+      <button id="skip">건너뛰기</button>
+      <span id="log"></span>
+    </div>
+    <div id="stage"><div class="mock">“말씀 일부 ______ 말씀 일부”</div></div>
+    <script type="module">
+      import { createAnimationPlayer } from './player.ts';
+      const player = createAnimationPlayer(document.getElementById('stage'), '/media/');
+      const log = document.getElementById('log');
+      let paused = false;
+      document.querySelectorAll('[data-k]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          await player.unlockAudio();
+          const k = b.dataset.k;
+          const ctx = k === 'wrong0' ? { teamName: '믿음팀', livesBefore: 1, livesAfter: 0 } : { teamName: '믿음팀', livesBefore: 3, livesAfter: 2 };
+          const t0 = performance.now();
+          log.textContent = '재생 중…';
+          const r = await player.play(k === 'wrong0' ? 'wrong' : k, ctx);
+          log.textContent = `${k}: ${r} (${Math.round(performance.now() - t0)}ms)`;
+        }),
+      );
+      document.getElementById('pause').onclick = () => { paused ? player.resume() : player.pause(); paused = !paused; };
+      document.getElementById('skip').onclick = () => player.skip();
+      window.__player = player;
+    </script>
+  </body>
+</html>
