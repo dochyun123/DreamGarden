@@ -139,7 +139,7 @@ export function createQuestionScreen(ctx: Ctx): Screen {
           void el.offsetWidth;
           el.querySelector('.q-body')?.classList.add('q-enter');
         } else {
-          prompt.replaceChildren('문제를 불러올 수 없습니다. 관리 메뉴에서 문제 데이터를 확인하세요.');
+          prompt.replaceChildren('문제를 불러올 수 없습니다.');
           choices.replaceChildren();
         }
       }

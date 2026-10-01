@@ -107,17 +107,23 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px s
   gap: 32px;
   text-align: center;
 }
-.start__eyebrow { font-size: 36px; letter-spacing: 0.4em; color: var(--c-highlight); font-weight: var(--fw-bold); padding-left: 0.4em; }
 .start__title {
-  margin: 0;
+  margin: 0 0 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-display);
-  font-size: var(--fs-display);
   font-weight: 400;
-  letter-spacing: -0.02em;
+  line-height: 1.1;
   text-shadow: 0 0 60px rgba(118, 100, 232, 0.7), 0 6px 0 rgba(0, 0, 0, 0.35);
 }
-.start__sub { font-size: 36px; color: var(--c-text-dim); margin-bottom: 40px; }
-.start__hint { font-size: var(--fs-small); color: var(--c-text-faint); }
+.start__title-main { font-size: 100px; letter-spacing: -0.01em; }
+.start__title-accent {
+  font-size: 200px;
+  color: var(--c-highlight);
+  text-shadow: 0 0 70px rgba(255, 226, 123, 0.55), 0 8px 0 rgba(0, 0, 0, 0.35);
+}
 .start .btn--large { min-width: 420px; }
 
 /* ───────── 상단 탭 바 (팀 선택 / 리더보드 / 관리) ───────── */
@@ -130,7 +136,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px s
   padding: 36px var(--gutter) 0;
   box-sizing: border-box;
 }
-.topbar__brand { font-size: 34px; font-weight: var(--fw-black); color: var(--c-text-dim); }
+.topbar__brand { font-size: 26px; font-weight: var(--fw-bold); color: var(--c-text-dim); line-height: 1.25; }
 .topbar__brand b { color: var(--c-highlight); }
 .topbar__right { justify-self: end; }
 .tabs {
@@ -167,7 +173,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px s
 }
 
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 28px var(--gutter) 56px; box-sizing: border-box; }
-.page__head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; }
+.page__head { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+.page__head > .page__meta:only-child { margin-left: auto; }
 .page__title { margin: 0; font-family: var(--font-display); font-size: var(--fs-h1); font-weight: 400; letter-spacing: 0.01em; }
 .page__meta { font-size: var(--fs-body); color: var(--c-text-dim); }
 
@@ -224,7 +231,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px s
   background: var(--c-surface-sunken);
   color: var(--c-text-dim);
 }
-.team-card__cta { font-size: var(--fs-small); color: var(--c-text-dim); margin-top: 12px; }
 
 .team-card--notStarted:hover:not(:disabled) {
   transform: translateY(-6px);
@@ -232,7 +238,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px s
   background: var(--c-surface-raised);
   box-shadow: var(--glow-accent);
 }
-.team-card--notStarted:hover:not(:disabled) .team-card__cta { color: var(--c-text); }
 .team-card:disabled { cursor: not-allowed; }
 .team-card--notStarted:disabled { opacity: 0.5; }
 
@@ -264,9 +269,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px s
 
 /* ───────── 문제 화면 ───────── */
 .question { padding: 64px var(--gutter) 46px; box-sizing: border-box; }
-.q-head { position: relative; flex: none; height: 130px; display: flex; justify-content: center; align-items: flex-start; }
+.q-head { position: relative; flex: none; height: 130px; margin: 0 -40px; display: flex; justify-content: center; align-items: flex-start; }
 .q-team { margin: 14px 0 0; font-size: var(--fs-team); font-weight: var(--fw-black); letter-spacing: -0.01em; }
-.q-lives { position: absolute; right: -40px; top: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.q-lives { position: absolute; right: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .q-lives__label { font-size: var(--fs-lives); font-weight: var(--fw-bold); }
 .q-lives__hearts { display: flex; gap: 22px; }
 .heart { width: 52px; height: 48px; display: block; color: var(--c-heart); filter: drop-shadow(0 0 10px rgba(255, 92, 122, 0.55)); transition: color var(--t-med), filter var(--t-med), transform var(--t-med); }
@@ -430,6 +435,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px s
 .panel__title { margin: 0; font-size: 34px; font-weight: var(--fw-black); }
 .panel__desc { margin: 0; font-size: var(--fs-small); color: var(--c-text-dim); }
 .panel__row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.panel { justify-content: center; }
 .panel--wide { grid-column: 1 / -1; }
 .lock-note { display: flex; align-items: center; gap: 10px; font-size: var(--fs-small); color: var(--c-warning); }
 
@@ -481,7 +487,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px s
 }
 .sheet__head { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .sheet__title { margin: 0; font-size: var(--fs-h2); font-weight: var(--fw-black); }
-.sheet__sub { font-size: var(--fs-small); color: var(--c-text-dim); }
 .sheet .admin { grid-template-columns: 1fr 1fr; }
 
 /* 확인 모달 */
@@ -617,3 +622,9 @@ select.field { font-size: 24px; font-weight: var(--fw-regular); cursor: pointer;
 
 .modal--reveal { border-color: var(--c-warning); }
 .tag--live { margin-left: 12px; padding: 2px 14px; font-size: 20px; vertical-align: middle; background: var(--c-highlight); color: #2a2100; }
+
+/* 패널 폭에 맞추는 버튼: 두 줄(제목 + 작은 설명) */
+.btn--block { width: 100%; box-sizing: border-box; }
+.btn--stacked { flex-direction: column; gap: 2px; padding: 12px 24px; white-space: normal; text-align: center; }
+.btn__sub { font-size: 22px; font-weight: var(--fw-regular); color: var(--c-text-dim); }
+.panel, .panel__row > * { min-width: 0; }

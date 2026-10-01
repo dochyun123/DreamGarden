@@ -11,7 +11,6 @@ export function createLeaderboardBody(): Screen {
     update(state) {
       const rows = computeLeaderboard(state);
       const head = h('div', { class: 'page__head' },
-        h('h2', { class: 'page__title' }, '리더보드'),
         h('div', { class: 'page__meta' }, `완료 ${rows.length} / ${state.teams.length}팀`),
       );
       if (rows.length === 0) {

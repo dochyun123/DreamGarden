@@ -6,6 +6,7 @@ import './tokens.css';
 import './ui.css';
 import type { Ctx, LocalUi, Screen } from './context';
 import { h } from './dom';
+import { brand } from './brand';
 import { createStartScreen } from './screens/start';
 import { createSetupScreen } from './screens/setup';
 import { createQuestionScreen } from './screens/question';
@@ -98,7 +99,7 @@ function createTabsScreen(ctx: Ctx): Screen {
   slot.style.cssText = 'flex:1;min-height:0;display:flex;flex-direction:column;';
   const el = h('section', { class: 'screen' },
     h('header', { class: 'topbar' },
-      h('div', { class: 'topbar__brand' }, '말씀 암송 ', h('b', null, '퀴즈쇼')),
+      brand(),
       h('nav', { class: 'tabs', attrs: { role: 'tablist' } }, tabButtons),
       right,
     ),
@@ -222,7 +223,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     const confirmKey = confirm ? JSON.stringify(confirm) : '';
     if (confirmModal && confirmModal.key !== confirmKey) { confirmModal.el.remove(); confirmModal = null; }
     if (confirm && !confirmModal) {
-      confirmModal = { key: confirmKey, el: createConfirmModal(ctx, confirm, state) };
+      confirmModal = { key: confirmKey, el: createConfirmModal(ctx, confirm) };
       overlay.append(confirmModal.el);
     }
 

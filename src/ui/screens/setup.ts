@@ -4,6 +4,7 @@ import type { UiState } from '../ui';
 import type { Ctx, Screen, SetupRowDraft } from '../context';
 import { MAX_TEAMS } from '../context';
 import { h } from '../dom';
+import { brand } from '../brand';
 import { editLockReason } from './admin';
 
 const DEFAULT_TEAM_COUNT = 8;
@@ -50,10 +51,13 @@ export function createSetupScreen(ctx: Ctx): Screen {
   });
   const contentInfo = h('div', { class: 'content-info' });
   const importBtn = h('button', {
-    class: 'btn',
+    class: 'btn btn--block btn--stacked',
     attrs: { type: 'button' },
     on: { click: () => fileInput.click() },
-  }, '📂 문제 파일 가져오기 (JSON·CSV)');
+  },
+    h('span', { class: 'btn__label' }, '📂 문제 파일 가져오기'),
+    h('span', { class: 'btn__sub' }, 'JSON · CSV'),
+  );
   const countValue = h('div', { class: 'stepper__value', attrs: { 'aria-live': 'polite' } });
   const minus = h('button', { class: 'btn', attrs: { type: 'button', 'aria-label': '팀 수 줄이기' }, on: { click: () => setCount(-1) } }, '−');
   const plus = h('button', { class: 'btn', attrs: { type: 'button', 'aria-label': '팀 수 늘리기' }, on: { click: () => setCount(1) } }, '+');
@@ -73,7 +77,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
 
   const el = h('section', { class: 'screen' },
     h('header', { class: 'topbar' },
-      h('div', { class: 'topbar__brand' }, '말씀 암송 ', h('b', null, '퀴즈쇼')),
+      brand(),
       h('h1', { class: 'page__title' }, '초기 설정'),
       h('div', { class: 'topbar__right' }, cancel),
     ),
@@ -85,8 +89,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
             contentInfo,
             h('div', { class: 'panel__row' }, importBtn, fileInput),
             h('p', { class: 'panel__desc' },
-              h('a', { class: 'link', attrs: { href: './content-template.csv', download: true } }, 'CSV 템플릿 받기'),
-              ' · 작성 방법은 docs/content-guide.md'),
+              h('a', { class: 'link', attrs: { href: './content-template.csv', download: true } }, 'CSV 템플릿 받기')),
           ),
           h('section', { class: 'panel' },
             h('h3', { class: 'panel__title' }, '2. 팀 수'),
@@ -97,10 +100,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
           h('div', { class: 'setup__actions' }, submit),
         ),
         h('div', { class: 'setup__main' },
-          h('div', { class: 'page__head' },
-            h('h3', { class: 'panel__title' }, '3. 팀 이름과 문제 세트'),
-            h('div', { class: 'page__meta' }, '빈 이름과 중복 이름은 등록할 수 없습니다'),
-          ),
+          h('div', { class: 'page__head' }, h('h3', { class: 'panel__title' }, '3. 팀 이름과 문제 세트')),
           rows,
         ),
       ),
@@ -185,12 +185,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
       const locked = !!lock;
       normalizeRows(dr.rows, dr.count, sets);
 
-      contentInfo.replaceChildren(
-        sets.length
-          ? h('b', null, `${sets.length}개 세트 불러옴`)
-          : h('b', null, '불러온 문제가 없습니다'),
-        sets.length ? `버전 ${s.contentVersion || '-'}` : '먼저 문제 파일(JSON·CSV)을 가져오세요',
-      );
+      contentInfo.replaceChildren(h('b', null, sets.length ? `${sets.length}개 세트 불러옴` : '불러온 문제가 없습니다'));
       importBtn.disabled = locked;
       minus.disabled = locked || dr.count <= 1;
       plus.disabled = locked || dr.count >= MAX_TEAMS;

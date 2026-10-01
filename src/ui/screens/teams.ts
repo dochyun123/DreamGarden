@@ -34,10 +34,7 @@ export function createTeamsBody(ctx: Ctx): Screen {
           on: { click: () => ctx.actions.returnToChallenge() },
         },
         h('div', null, num, name),
-        h('div', null,
-          h('div', { class: 'team-card__status' }, '● 진행 중'),
-          h('div', { class: 'team-card__cta' }, '눌러서 이어서 진행'),
-        ),
+        h('div', { class: 'team-card__status' }, '● 진행 중'),
       );
     }
 
@@ -49,10 +46,7 @@ export function createTeamsBody(ctx: Ctx): Screen {
         on: { click: () => { if (!state.progress) ctx.actions.startChallenge(team.id); } },
       },
       h('div', null, num, name),
-      h('div', null,
-        h('div', { class: 'team-card__status' }, '미도전'),
-        h('div', { class: 'team-card__cta' }, busy ? '진행 중인 도전이 끝나면 선택할 수 있어요' : '눌러서 도전 시작'),
-      ),
+      h('div', { class: 'team-card__status' }, '미도전'),
     );
   }
 
@@ -93,7 +87,6 @@ export function createTeamsBody(ctx: Ctx): Screen {
 
       el.replaceChildren(
         h('div', { class: 'page__head' },
-          h('h2', { class: 'page__title' }, '도전할 팀을 선택하세요'),
           h('div', { class: 'page__meta' }, `완료 ${done} / ${teams.length}팀`),
         ),
         h('div', { class: 'team-grid' }, visible.map((t, i) => card(state, t, start + i))),

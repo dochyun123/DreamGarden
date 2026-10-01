@@ -11,8 +11,8 @@ type Mode = 'page' | 'menu';
 
 /** 편집(팀·문제 변경) 잠금 사유. null이면 편집 가능 */
 export function editLockReason(state: GameState): string | null {
-  if (state.progress) return '진행 중인 도전이 있어 팀·문제를 바꿀 수 없습니다.';
-  if (state.results.length > 0) return '완료 기록이 있어 잠겨 있습니다. 전체 기록 초기화 후 바꿀 수 있습니다.';
+  if (state.progress) return '도전 진행 중에는 바꿀 수 없습니다.';
+  if (state.results.length > 0) return '기록 초기화 후 바꿀 수 있습니다.';
   return null;
 }
 
@@ -21,16 +21,13 @@ export function noticeBanner(ui: UiState): HTMLElement | null {
   return h('div', { class: 'notice', attrs: { role: 'alert' } }, h('span', { class: 'notice__icon' }, '!'), ui.notice);
 }
 
-function panel(title: string, desc: string | null, ...children: (HTMLElement | null)[]): HTMLElement {
-  return h('section', { class: 'panel' },
-    h('h3', { class: 'panel__title' }, title),
-    desc ? h('p', { class: 'panel__desc' }, desc) : null,
-    ...children,
-  );
+/** 제목·설명 없이 버튼 묶음만 담는 패널 (TV 화면 문구 최소화) */
+function panel(...children: (HTMLElement | null)[]): HTMLElement {
+  return h('section', { class: 'panel' }, ...children);
 }
 
-function widePanel(title: string, desc: string | null, ...children: (HTMLElement | null)[]): HTMLElement {
-  const el = panel(title, desc, ...children);
+function widePanel(...children: (HTMLElement | null)[]): HTMLElement {
+  const el = panel(...children);
   el.classList.add('panel--wide');
   return el;
 }
@@ -64,7 +61,7 @@ function createAdminControls(ctx: Ctx, mode: Mode): Screen {
 
       if (ui.animationStuck || animating) {
         parts.push(h('div', { class: 'notice notice--stuck panel--wide' },
-          h('span', null, ui.animationStuck ? '연출이 재생되지 않고 있습니다. 건너뛰고 진행하세요.' : '연출 재생 중입니다.'),
+          h('span', null, ui.animationStuck ? '연출이 멈췄습니다.' : ''),
           h('button', {
             class: `btn ${ui.animationStuck ? 'btn--warning' : ''}`,
             attrs: { type: 'button' },
@@ -73,7 +70,7 @@ function createAdminControls(ctx: Ctx, mode: Mode): Screen {
         ));
       }
 
-      parts.push(panel('되돌리기', '도전 시작과 답 선택을 한 단계씩 되돌립니다.',
+      parts.push(panel(
         h('div', { class: `undo-label${label ? '' : ' is-empty'}` }, label ? `마지막 행동: ${label}` : '되돌릴 행동이 없습니다'),
         h('div', { class: 'panel__row' },
           h('button', {
@@ -89,7 +86,7 @@ function createAdminControls(ctx: Ctx, mode: Mode): Screen {
         volumeInput.value = String(v);
         volumeValue.textContent = `${v}%`;
       }
-      parts.push(panel('소리 · 화면', null,
+      parts.push(panel(
         volumeRow,
         h('div', { class: 'panel__row' },
           h('button', {
@@ -102,7 +99,7 @@ function createAdminControls(ctx: Ctx, mode: Mode): Screen {
 
       if (mode === 'menu') {
         const go = (fn: () => void) => () => { a.closeAdminMenu(); fn(); };
-        parts.push(widePanel('이동', '현재 도전은 그대로 보존됩니다.',
+        parts.push(widePanel(
           h('div', { class: 'panel__row' },
             ui.view !== 'question' && p
               ? h('button', { class: 'btn btn--primary', attrs: { type: 'button' }, on: { click: go(() => a.returnToChallenge()) } }, '도전 화면으로')
@@ -113,7 +110,7 @@ function createAdminControls(ctx: Ctx, mode: Mode): Screen {
           ),
         ));
       } else {
-        parts.push(panel('문제 · 팀', `문제 데이터 ${state.questionSets.length}세트 · 팀 ${state.teams.length}개 · 버전 ${state.contentVersion || '-'}`,
+        parts.push(panel(
           h('div', { class: 'panel__row' },
             h('button', {
               class: 'btn',
@@ -129,7 +126,7 @@ function createAdminControls(ctx: Ctx, mode: Mode): Screen {
           lock ? h('div', { class: 'lock-note' }, '🔒 ', lock) : null,
         ));
         const hasRecords = !!p || state.results.length > 0 || state.undoHistory.length > 0;
-        parts.push(panel('전체 기록 초기화', '진행·결과·되돌리기 기록을 지웁니다. 팀명과 문제 연결은 유지됩니다.',
+        parts.push(panel(
           h('div', { class: 'panel__row' },
             h('button', {
               class: 'btn btn--danger',
@@ -188,14 +185,14 @@ function createReview(ctx: Ctx): Screen {
               },
             },
               h('b', null, s.scriptureReference, s.id === active ? h('span', { class: 'tag tag--live' }, '진행 중') : null),
-              h('span', null, `${s.id} · ${teams.length ? teams.join(', ') : '연결된 팀 없음'}`),
+              h('span', null, teams.length ? teams.join(', ') : '연결된 팀 없음'),
             );
           }),
         ),
         hidden
           ? h('div', { class: 'review__detail' },
               h('div', { class: 'empty' },
-                '진행 중인 팀의 세트라 정답을 가려 두었습니다',
+                '진행 중인 팀의 정답은 가려져 있습니다',
                 h('button', { class: 'btn btn--warning', attrs: { type: 'button' }, on: { click: askReveal } }, '정답 보기…'),
               ),
             )
@@ -249,7 +246,6 @@ export function createAdminBody(ctx: Ctx): Screen {
       }
       controls.update(state, ui);
       el.replaceChildren(
-        h('div', { class: 'page__head' }, h('h2', { class: 'page__title' }, '관리')),
         noticeBanner(ui) ?? '',
         controls.el,
       );
@@ -263,10 +259,7 @@ export function createAdminMenu(ctx: Ctx): Screen {
   const notice = h('div');
   const sheet = h('div', { class: 'sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '관리 메뉴' } },
     h('div', { class: 'sheet__head' },
-      h('div', null,
-        h('h2', { class: 'sheet__title' }, '관리 메뉴'),
-        h('div', { class: 'sheet__sub' }, '메뉴가 열려 있는 동안 답 입력과 연출이 멈춥니다.'),
-      ),
+      h('h2', { class: 'sheet__title' }, '관리 메뉴'),
       h('button', {
         class: 'btn btn--primary',
         attrs: { type: 'button' },
@@ -290,7 +283,7 @@ export function createAdminMenu(ctx: Ctx): Screen {
 }
 
 /** 자체 확인 모달 (window.confirm 대신): 전체 기록 초기화, 진행 팀 정답 공개 */
-export function createConfirmModal(ctx: Ctx, confirm: NonNullable<Ctx['local']['confirm']>, state: GameState): HTMLElement {
+export function createConfirmModal(ctx: Ctx, confirm: NonNullable<Ctx['local']['confirm']>): HTMLElement {
   const cancel = () => { ctx.local.confirm = null; ctx.rerender(); };
   let title: string;
   let body: (string | HTMLElement)[];
@@ -299,18 +292,13 @@ export function createConfirmModal(ctx: Ctx, confirm: NonNullable<Ctx['local']['
   let onOk: () => void;
   if (confirm.kind === 'reset') {
     title = '전체 기록을 초기화할까요?';
-    body = [
-      '모든 팀의 진행 상황, 결과, 되돌리기 기록이 지워지고 모든 팀이 미도전으로 돌아갑니다.', h('br'),
-      '팀명과 문제 연결은 유지됩니다. 이 작업은 되돌릴 수 없습니다.',
-    ];
+    body = ['팀명과 문제는 유지됩니다.'];
     okLabel = '초기화';
     okClass = 'btn--danger-solid';
     onOk = () => { ctx.local.confirm = null; ctx.actions.resetRecords(); ctx.rerender(); };
   } else {
-    const p = state.progress;
-    const team = p ? state.teams.find((t) => t.id === p.activeTeamId)?.name : null;
     title = '진행 중인 팀의 정답이 화면에 표시됩니다. 계속할까요?';
-    body = [`${team ?? '진행 중인 팀'}의 문제 세트입니다. TV에 연결되어 있다면 참가자에게 정답이 보일 수 있습니다.`];
+    body = [];
     okLabel = '정답 보기';
     okClass = 'btn--warning';
     const setId = confirm.setId;
@@ -325,7 +313,7 @@ export function createConfirmModal(ctx: Ctx, confirm: NonNullable<Ctx['local']['
   const el = h('div', { class: 'scrim', on: { click: (e) => { if (e.target === el) cancel(); } } },
     h('div', { class: `modal modal--${confirm.kind}`, attrs: { role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'confirm-title' } },
       h('h2', { class: 'modal__title', attrs: { id: 'confirm-title' } }, title),
-      h('p', { class: 'modal__body' }, ...body),
+      body.length ? h('p', { class: 'modal__body' }, ...body) : null,
       h('div', { class: 'modal__actions' },
         cancelBtn,
         h('button', { class: `btn ${okClass}`, attrs: { type: 'button' }, on: { click: onOk } }, okLabel),
