@@ -141,7 +141,7 @@ describe('app 통합', () => {
     expect(state().progress).toMatchObject({ phase: 'correct', passedCount: 1 });
     expect(fake.player.play).toHaveBeenCalledTimes(1);
     expect(lastPlay().kind).toBe('correct');
-    expect(lastPlay().ctx).toEqual({ teamName: '믿음팀', livesBefore: 3, livesAfter: 3 });
+    expect(lastPlay().ctx).toEqual({ teamName: '믿음팀', scriptureReference: '샘플 1장 1절', livesBefore: 3, livesAfter: 3 });
 
     // 연출 중 추가 클릭은 무시
     actions().selectChoice(wrongId());
