@@ -199,6 +199,7 @@ export function bootstrap(root: HTMLElement): void {
     void player
       .play(kind, {
         teamName: team?.name ?? '',
+        scriptureReference: state.questionSets.find((s) => s.id === team?.questionSetId)?.scriptureReference,
         livesBefore: kind === 'wrong' ? progress.lives + 1 : progress.lives,
         livesAfter: progress.lives,
       })

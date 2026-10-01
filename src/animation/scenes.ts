@@ -270,7 +270,21 @@ function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean)
         }
       },
     },
-    { at: 2600, run: () => caption(doc, root, '천국 입성!', `${ctx.teamName} · 5문제 모두 통과!`) },
+    {
+      at: 2600,
+      run: () => {
+        const cap = caption(doc, root, '천국 입성!', `${ctx.teamName} · 5문제 모두 통과!`);
+        const ref = ctx.scriptureReference?.trim();
+        if (ref) {
+          const verse = doc.createElement('span');
+          verse.className = 'ap-verse';
+          verse.dataset.part = 'verse';
+          verse.textContent = ref;
+          cap.insertBefore(verse, cap.querySelector('.ap-sub'));
+          cap.classList.add('has-verse');
+        }
+      },
+    },
   ];
   return withFade(root, steps, DURATION.heaven);
 }

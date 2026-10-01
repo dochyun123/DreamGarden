@@ -9,6 +9,8 @@ export interface PlayContext {
   teamName: string;
   livesBefore: number;
   livesAfter: number;
+  /** 팀이 암송한 구절 출처 (예: '요한복음 3:16'). heaven에서만 표시, 비어 있으면 생략 */
+  scriptureReference?: string;
 }
 
 export interface AnimationPlayer {

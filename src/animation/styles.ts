@@ -106,6 +106,11 @@ export const CSS = `
   animation:ap-twinkle 1.1s ease-in-out var(--delay) infinite}
 .ap-heaven .ap-caption{top:auto;bottom:6cqh;transform:none}
 .ap-heaven .ap-big{color:var(--c-correct,#FFCF6B);-webkit-text-stroke-color:#5A2E0E;font-size:15cqh;animation:ap-pop .6s cubic-bezier(.2,1.6,.4,1) both}
+.ap-verse{display:block;margin-top:1cqh;font-size:8cqh;color:var(--c-correct,#FFCF6B);paint-order:stroke fill;
+  -webkit-text-stroke:1.1cqh #4A230A;text-shadow:0 .7cqh 0 rgba(58,38,26,.45);animation:ap-pop .6s cubic-bezier(.2,1.6,.4,1) .25s both}
+.ap-heaven .has-verse{bottom:3cqh}
+.ap-heaven .has-verse .ap-big{font-size:13cqh}
+.ap-heaven .has-verse .ap-sub{margin-top:1.5cqh;font-size:4.6cqh}
 .ap-heaven .ap-sub{color:var(--c-surface,#3A261A);text-shadow:0 0 1.5cqh #FFF4E6}
 
 /* 저사양 모드 (?lite=1): 큰 필터·블렌딩·무한 회전 제거 */
