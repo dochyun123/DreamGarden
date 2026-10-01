@@ -11,7 +11,7 @@ import { createSetupScreen } from './screens/setup';
 import { createQuestionScreen } from './screens/question';
 import { createTeamsBody } from './screens/teams';
 import { createLeaderboardBody } from './screens/leaderboard';
-import { createAdminBody, createAdminMenu, createResetModal } from './screens/admin';
+import { createAdminBody, createAdminMenu, createConfirmModal } from './screens/admin';
 
 export type View = 'setup' | 'teams' | 'question' | 'leaderboard' | 'admin';
 
@@ -134,14 +134,16 @@ function createTabsScreen(ctx: Ctx): Screen {
       );
 
       const body = bodies[view];
-      body.update(state, ui);
       if (shown !== view) {
+        // 관리 화면을 새로 열 때마다 진행 팀 정답 공개 확인을 다시 받는다
+        if (view === 'admin') ctx.local.revealedSetId = null;
         shown = view;
         body.el.classList.remove('screen-enter');
         slot.replaceChildren(body.el);
         void body.el.offsetWidth;
         body.el.classList.add('screen-enter');
       }
+      body.update(state, ui);
     },
   };
 }
@@ -170,13 +172,14 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
   let last: { state: GameState; ui: UiState } | null = null;
   let current: { key: ScreenKey; screen: Screen } | null = null;
   let menu: Screen | null = null;
-  let resetModal: HTMLElement | null = null;
+  let confirmModal: { key: string; el: HTMLElement } | null = null;
 
   const local: LocalUi = {
     teamsPage: 0,
     adminSub: 'main',
     reviewSetId: null,
-    confirmReset: false,
+    confirm: null,
+    revealedSetId: null,
     lock: null,
     setup: null,
   };
@@ -191,7 +194,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !last) return;
-    if (local.confirmReset) { local.confirmReset = false; ctx.rerender(); }
+    if (local.confirm) { local.confirm = null; ctx.rerender(); }
     else if (last.ui.adminMenuOpen) actions.closeAdminMenu();
   });
 
@@ -215,9 +218,13 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
       menu = null;
     }
 
-    const wantReset = ui.started && local.confirmReset;
-    if (wantReset && !resetModal) { resetModal = createResetModal(ctx); overlay.append(resetModal); }
-    else if (!wantReset && resetModal) { resetModal.remove(); resetModal = null; }
+    const confirm = ui.started ? local.confirm : null;
+    const confirmKey = confirm ? JSON.stringify(confirm) : '';
+    if (confirmModal && confirmModal.key !== confirmKey) { confirmModal.el.remove(); confirmModal = null; }
+    if (confirm && !confirmModal) {
+      confirmModal = { key: confirmKey, el: createConfirmModal(ctx, confirm, state) };
+      overlay.append(confirmModal.el);
+    }
 
     stage.classList.toggle('is-paused', ui.adminMenuOpen);
     stage.dataset.view = key === 'tabs' ? ui.view : key;

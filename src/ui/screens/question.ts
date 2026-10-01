@@ -126,7 +126,8 @@ export function createQuestionScreen(ctx: Ctx): Screen {
       if (!p) return;
       const team = s.teams.find((t) => t.id === p.activeTeamId);
       teamName.textContent = team?.name ?? '';
-      renderLives(p.lives);
+      // 하트는 연출이 줄인다: 오답 연출 중에는 차감 전 값, 불구덩이에서는 0
+      renderLives(p.phase === 'wrong' ? Math.min(STARTING_LIVES, p.lives + 1) : p.phase === 'inferno' ? 0 : p.lives);
 
       const q = getCurrentQuestion(s);
       const key = `${p.activeTeamId}|${p.questionIndex}|${q?.id ?? ''}`;

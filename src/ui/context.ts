@@ -18,7 +18,10 @@ export interface LocalUi {
   teamsPage: number;
   adminSub: 'main' | 'review';
   reviewSetId: string | null;
-  confirmReset: boolean;
+  /** 자체 확인 모달 (window.confirm 대신) */
+  confirm: { kind: 'reset' } | { kind: 'reveal'; setId: string } | null;
+  /** 진행 중인 팀의 세트를 검수 화면에 공개하기로 확인했는가 (관리 화면을 다시 열면 초기화) */
+  revealedSetId: string | null;
   /** 보기 클릭 즉시 잠금: 이 runId에서는 다시 선택할 수 없다 */
   lock: { runId: number; choiceId: string } | null;
   setup: { count: number; rows: SetupRowDraft[]; parseError: string | null } | null;

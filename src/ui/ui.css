@@ -611,3 +611,9 @@ select.field { font-size: 24px; font-weight: var(--fw-regular); cursor: pointer;
 .sheet .panel { padding: 22px 28px; gap: 12px; }
 .link { color: var(--c-highlight); font-weight: var(--fw-bold); text-decoration: underline; text-underline-offset: 4px; }
 .link:hover { color: #fff; }
+
+/* 연출 중 다른 화면으로 이동하면 일시정지된 오버레이를 숨긴다 (cancel하지 않고 문제 화면 복귀 시 이어서 재생) */
+.stage:not([data-view="question"]) .anim-host { visibility: hidden; }
+
+.modal--reveal { border-color: var(--c-warning); }
+.tag--live { margin-left: 12px; padding: 2px 14px; font-size: 20px; vertical-align: middle; background: var(--c-highlight); color: #2a2100; }

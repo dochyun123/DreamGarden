@@ -134,7 +134,7 @@ function createAdminControls(ctx: Ctx, mode: Mode): Screen {
             h('button', {
               class: 'btn btn--danger',
               attrs: { type: 'button', disabled: !hasRecords },
-              on: { click: () => { ctx.local.confirmReset = true; ctx.rerender(); } },
+              on: { click: () => { ctx.local.confirm = { kind: 'reset' }; ctx.rerender(); } },
             }, '기록 초기화…'),
           ),
         ));
@@ -145,6 +145,13 @@ function createAdminControls(ctx: Ctx, mode: Mode): Screen {
   };
 }
 
+/** 진행 중인 팀의 문제 세트 id */
+function activeSetId(state: GameState): string | null {
+  const p = state.progress;
+  if (!p) return null;
+  return state.teams.find((t) => t.id === p.activeTeamId)?.questionSetId ?? null;
+}
+
 /** 문제 세트 검수 — 실제 출제 순서대로, 정답 표시 */
 function createReview(ctx: Ctx): Screen {
   const el = h('div', { class: 'review' });
@@ -152,9 +159,14 @@ function createReview(ctx: Ctx): Screen {
     el,
     update(state) {
       const sets = state.questionSets;
-      const current = sets.find((s) => s.id === ctx.local.reviewSetId) ?? sets[0];
+      const active = activeSetId(state);
+      // 처음 열 때는 진행 중인 팀의 세트를 피해서 고른다
+      const current = sets.find((s) => s.id === ctx.local.reviewSetId)
+        ?? sets.find((s) => s.id !== active) ?? sets[0];
       if (!current) { el.replaceChildren(h('div', { class: 'empty' }, '문제 데이터가 없습니다')); return; }
       ctx.local.reviewSetId = current.id;
+      const hidden = current.id === active && ctx.local.revealedSetId !== active;
+      const askReveal = () => { ctx.local.confirm = { kind: 'reveal', setId: current.id }; ctx.rerender(); };
       const teamsOf = (setId: string) => state.teams.filter((t) => t.questionSetId === setId).map((t) => t.name);
 
       el.replaceChildren(
@@ -164,14 +176,30 @@ function createReview(ctx: Ctx): Screen {
             return h('button', {
               class: `review__item${s.id === current.id ? ' is-active' : ''}`,
               attrs: { type: 'button' },
-              on: { click: () => { ctx.local.reviewSetId = s.id; ctx.rerender(); } },
+              on: {
+                click: () => {
+                  if (s.id === active && ctx.local.revealedSetId !== active) {
+                    ctx.local.confirm = { kind: 'reveal', setId: s.id };
+                  } else {
+                    ctx.local.reviewSetId = s.id;
+                  }
+                  ctx.rerender();
+                },
+              },
             },
-              h('b', null, s.scriptureReference),
+              h('b', null, s.scriptureReference, s.id === active ? h('span', { class: 'tag tag--live' }, '진행 중') : null),
               h('span', null, `${s.id} · ${teams.length ? teams.join(', ') : '연결된 팀 없음'}`),
             );
           }),
         ),
-        h('div', { class: 'review__detail' },
+        hidden
+          ? h('div', { class: 'review__detail' },
+              h('div', { class: 'empty' },
+                '진행 중인 팀의 세트라 정답을 가려 두었습니다',
+                h('button', { class: 'btn btn--warning', attrs: { type: 'button' }, on: { click: askReveal } }, '정답 보기…'),
+              ),
+            )
+          : h('div', { class: 'review__detail' },
           h('div', { class: 'review__scripture' },
             h('h3', null, current.scriptureReference),
             h('p', null, current.scriptureText),
@@ -261,23 +289,46 @@ export function createAdminMenu(ctx: Ctx): Screen {
   };
 }
 
-/** 전체 기록 초기화 확인 모달 (window.confirm 대신) */
-export function createResetModal(ctx: Ctx): HTMLElement {
-  const cancel = () => { ctx.local.confirmReset = false; ctx.rerender(); };
+/** 자체 확인 모달 (window.confirm 대신): 전체 기록 초기화, 진행 팀 정답 공개 */
+export function createConfirmModal(ctx: Ctx, confirm: NonNullable<Ctx['local']['confirm']>, state: GameState): HTMLElement {
+  const cancel = () => { ctx.local.confirm = null; ctx.rerender(); };
+  let title: string;
+  let body: (string | HTMLElement)[];
+  let okLabel: string;
+  let okClass: string;
+  let onOk: () => void;
+  if (confirm.kind === 'reset') {
+    title = '전체 기록을 초기화할까요?';
+    body = [
+      '모든 팀의 진행 상황, 결과, 되돌리기 기록이 지워지고 모든 팀이 미도전으로 돌아갑니다.', h('br'),
+      '팀명과 문제 연결은 유지됩니다. 이 작업은 되돌릴 수 없습니다.',
+    ];
+    okLabel = '초기화';
+    okClass = 'btn--danger-solid';
+    onOk = () => { ctx.local.confirm = null; ctx.actions.resetRecords(); ctx.rerender(); };
+  } else {
+    const p = state.progress;
+    const team = p ? state.teams.find((t) => t.id === p.activeTeamId)?.name : null;
+    title = '진행 중인 팀의 정답이 화면에 표시됩니다. 계속할까요?';
+    body = [`${team ?? '진행 중인 팀'}의 문제 세트입니다. TV에 연결되어 있다면 참가자에게 정답이 보일 수 있습니다.`];
+    okLabel = '정답 보기';
+    okClass = 'btn--warning';
+    const setId = confirm.setId;
+    onOk = () => {
+      ctx.local.confirm = null;
+      ctx.local.revealedSetId = setId;
+      ctx.local.reviewSetId = setId;
+      ctx.rerender();
+    };
+  }
   const cancelBtn = h('button', { class: 'btn', attrs: { type: 'button' }, on: { click: cancel } }, '취소');
   const el = h('div', { class: 'scrim', on: { click: (e) => { if (e.target === el) cancel(); } } },
-    h('div', { class: 'modal', attrs: { role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'reset-title' } },
-      h('h2', { class: 'modal__title', attrs: { id: 'reset-title' } }, '전체 기록을 초기화할까요?'),
-      h('p', { class: 'modal__body' },
-        '모든 팀의 진행 상황, 결과, 되돌리기 기록이 지워지고 모든 팀이 미도전으로 돌아갑니다.', h('br'),
-        '팀명과 문제 연결은 유지됩니다. 이 작업은 되돌릴 수 없습니다.'),
+    h('div', { class: `modal modal--${confirm.kind}`, attrs: { role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'confirm-title' } },
+      h('h2', { class: 'modal__title', attrs: { id: 'confirm-title' } }, title),
+      h('p', { class: 'modal__body' }, ...body),
       h('div', { class: 'modal__actions' },
         cancelBtn,
-        h('button', {
-          class: 'btn btn--danger-solid',
-          attrs: { type: 'button' },
-          on: { click: () => { ctx.local.confirmReset = false; ctx.actions.resetRecords(); ctx.rerender(); } },
-        }, '초기화'),
+        h('button', { class: `btn ${okClass}`, attrs: { type: 'button' }, on: { click: onOk } }, okLabel),
       ),
     ),
   );
