@@ -308,3 +308,27 @@ describe('음량', () => {
     await expect(player.unlockAudio()).resolves.toBeUndefined();
   });
 });
+
+describe('저사양 모드', () => {
+  afterEach(() => history.replaceState(null, '', '/'));
+
+  it('?lite=1이면 ap-lite 클래스와 적은 입자', async () => {
+    history.replaceState(null, '', '/?lite=1');
+    player.cancel();
+    player = createAnimationPlayer(host, './media/');
+    track(player.play('inferno', { teamName: 'A', livesBefore: 1, livesAfter: 0 }));
+    expect(overlay()!.classList.contains('ap-lite')).toBe(true);
+    video()!.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(host.querySelectorAll('.ap-flame').length).toBe(8);
+    expect(host.querySelectorAll('.ap-ember').length).toBe(12);
+  });
+
+  it('기본은 일반 모드', async () => {
+    track(player.play('inferno', { teamName: 'A', livesBefore: 1, livesAfter: 0 }));
+    expect(overlay()!.classList.contains('ap-lite')).toBe(false);
+    video()!.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(host.querySelectorAll('.ap-flame').length).toBe(14);
+  });
+});

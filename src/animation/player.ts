@@ -39,6 +39,7 @@ export interface AnimationPlayer {
  * - 영상이 한 번도 시작하지 못한 kind는 기억해 두고 다음부터 바로 대체 연출 (404 대기 반복 방지).
  * - 'wrong' 영상이 끝나면 하트 소멸(0.7s) CSS 연출을 이어서 보여준다.
  * - pause()는 플레이어 상태다: 일시정지 중에 play()하면 일시정지된 채로 시작하고 resume()에서 진행.
+ * - 저사양 모드: 페이지 URL에 ?lite=1 → 불꽃 blur/contrast 필터·블렌딩·무한 회전 제거, 입자 수 축소.
  * - 모든 콜백은 세션이 살아 있는지 확인한다 → cancel/skip 뒤 늦은 타이머·ended 이벤트는 무시.
  */
 
@@ -61,6 +62,16 @@ interface Session {
 
 type AudioCtor = typeof AudioContext;
 
+/** ?lite=1 (또는 lite=true)이면 저사양 모드 */
+export function isLiteMode(win: Window): boolean {
+  try {
+    const v = new URLSearchParams(win.location.search).get('lite');
+    return v === '1' || v === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/'): AnimationPlayer {
   const doc = host.ownerDocument;
   const win = doc.defaultView ?? window;
@@ -70,6 +81,7 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
   let audio: AudioContext | null = null;
   let master: GainNode | null = null;
   const videoUnavailable = new Set<AnimationKind>();
+  const lite = isLiteMode(win);
 
   function getAudio(): AudioContext | null {
     if (audio) return audio;
@@ -153,7 +165,7 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
   }
 
   function runFallback(s: Session, endReason: AnimationEndReason): void {
-    runScene(s, buildScene(s.kind, doc, s.ctx, sfxFor(s)), endReason);
+    runScene(s, buildScene(s.kind, doc, s.ctx, sfxFor(s), lite), endReason);
   }
 
   function videoFailed(s: Session, v: HTMLVideoElement): void {
@@ -235,6 +247,7 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
     const overlay = doc.createElement('div');
     overlay.className = 'ap-overlay';
     if (paused) overlay.classList.add('ap-paused');
+    if (lite) overlay.classList.add('ap-lite');
     overlay.dataset.kind = kind;
     host.appendChild(overlay);
 

@@ -74,14 +74,14 @@ function withFade(root: HTMLElement, steps: SceneStep[], duration: number): Scen
 
 // ───────── 정답 ─────────
 
-function correctScene(doc: Document, sfx: SfxFn): Scene {
+function correctScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'correct');
   el(doc, 'ap-dim', root);
   el(doc, 'ap-flash', root);
   el(doc, 'ap-beam l', root);
   el(doc, 'ap-beam r', root);
   const colors = ['#FFE27B', '#FFB800', '#5BE3A6', '#7664E8', '#FF5C7A', '#FFFFFF'];
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0, n = lite ? 40 : 90; i < n; i++) {
     const c = el(doc, 'ap-confetti', root);
     const angle = rand(0, Math.PI * 2);
     const dist = rand(25, 70);
@@ -155,22 +155,23 @@ function wrongScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
 
 // ───────── 불구덩이 (만화풍 추락 + 불꽃) ─────────
 
-function infernoScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
+function infernoScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'inferno');
   const rumble = el(doc, 'ap-rumble', root);
   const card = el(doc, 'ap-card', rumble, ctx.teamName);
   const fire = el(doc, 'ap-fire');
-  for (let i = 0; i < 14; i++) {
+  const flames = lite ? 8 : 14;
+  for (let i = 0; i < flames; i++) {
     const f = el(doc, 'ap-flame', fire);
     vars(f, {
-      '--x': `${i * 7.4 - 4 + rand(-2, 2)}%`,
+      '--x': `${(i * 104) / flames - 4 + rand(-2, 2)}%`,
       '--w': `${rand(12, 20)}cqw`,
       '--h': `${rand(30, 58)}cqh`,
       '--d': `${rand(0.25, 0.5).toFixed(2)}s`,
       '--delay': `${rand(0, 0.3).toFixed(2)}s`,
     });
   }
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0, n = lite ? 12 : 40; i < n; i++) {
     const e = el(doc, 'ap-ember', fire);
     vars(e, {
       '--x': `${rand(5, 95)}%`,
@@ -205,7 +206,7 @@ function infernoScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
 
 // ───────── 천국 (구름 · 빛 · 문이 열림) ─────────
 
-function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
+function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'heaven');
   el(doc, 'ap-sky', root);
   const rays = el(doc, 'ap-rays', root);
@@ -240,7 +241,7 @@ function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
       run: () => {
         gate.classList.add('open');
         sfx('sparkle');
-        for (let i = 0; i < 24; i++) {
+        for (let i = 0, n = lite ? 10 : 24; i < n; i++) {
           const s = el(doc, 'ap-sparkle', root);
           vars(s, { '--x': `${rand(5, 95)}%`, '--y': `${rand(5, 60)}%`, '--delay': `${rand(0, 1).toFixed(2)}s` });
         }
@@ -251,15 +252,16 @@ function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
   return withFade(root, steps, DURATION.heaven);
 }
 
-export function buildScene(kind: AnimationKind, doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
+/** lite: 저사양 모드 — 입자 수를 줄인다 (필터·회전 제거는 styles.ts의 .ap-lite) */
+export function buildScene(kind: AnimationKind, doc: Document, ctx: PlayContext, sfx: SfxFn, lite = false): Scene {
   switch (kind) {
     case 'correct':
-      return correctScene(doc, sfx);
+      return correctScene(doc, sfx, lite);
     case 'wrong':
       return wrongScene(doc, ctx, sfx);
     case 'inferno':
-      return infernoScene(doc, ctx, sfx);
+      return infernoScene(doc, ctx, sfx, lite);
     case 'heaven':
-      return heavenScene(doc, ctx, sfx);
+      return heavenScene(doc, ctx, sfx, lite);
   }
 }
