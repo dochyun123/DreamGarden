@@ -332,3 +332,34 @@ describe('저사양 모드', () => {
     expect(host.querySelectorAll('.ap-flame').length).toBe(14);
   });
 });
+
+describe('가을 테마', () => {
+  afterEach(() => history.replaceState(null, '', '/'));
+
+  it('정답은 단풍잎·은행잎 낙엽 폭죽, lite면 수가 줄어든다', () => {
+    track(player.play('correct', ctx));
+    video()!.dispatchEvent(new Event('error'));
+    const normal = host.querySelectorAll('.ap-leaf').length;
+    expect(host.querySelectorAll('.ap-leaf.maple').length).toBeGreaterThan(0);
+    expect(host.querySelectorAll('.ap-leaf.ginkgo').length).toBeGreaterThan(0);
+    player.cancel();
+    history.replaceState(null, '', '/?lite=1');
+    player = createAnimationPlayer(host, './media/');
+    track(player.play('correct', ctx));
+    expect(host.querySelectorAll('.ap-leaf').length).toBeLessThan(normal);
+  });
+
+  it('잃은 하트는 네 조각으로 바스러진다', async () => {
+    track(player.play('wrong', ctx));
+    video()!.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(DURATION.wrongCaption + 200);
+    expect(host.querySelectorAll('.ap-heart.ap-break .frag').length).toBe(4);
+  });
+
+  it('천국 문이 열리면 황금 낙엽이 흩날린다', async () => {
+    track(player.play('heaven', ctx));
+    video()!.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(host.querySelectorAll('.ap-drift').length).toBeGreaterThan(0);
+  });
+});

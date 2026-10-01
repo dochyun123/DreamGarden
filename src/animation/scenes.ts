@@ -56,6 +56,11 @@ function caption(doc: Document, parent: HTMLElement, big: string, sub?: string):
 }
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
+const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
+
+// 가을 팔레트 — 주황·단풍 빨강·황금·갈색
+const MAPLE_COLORS = ['#D9682B', '#E2553B', '#C8442F', '#E89A3C', '#8B5A2B'] as const;
+const GINKGO_COLORS = ['#FFCF6B', '#F2B544', '#E8B04A'] as const;
 
 function vars(e: HTMLElement, v: Record<string, string>): void {
   for (const [k, val] of Object.entries(v)) e.style.setProperty(k, val);
@@ -80,18 +85,22 @@ function correctScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   el(doc, 'ap-flash', root);
   el(doc, 'ap-beam l', root);
   el(doc, 'ap-beam r', root);
-  const colors = ['#FFE27B', '#FFB800', '#5BE3A6', '#7664E8', '#FF5C7A', '#FFFFFF'];
-  for (let i = 0, n = lite ? 40 : 90; i < n; i++) {
-    const c = el(doc, 'ap-confetti', root);
-    const angle = rand(0, Math.PI * 2);
-    const dist = rand(25, 70);
-    c.style.background = colors[i % colors.length];
-    vars(c, {
+  // 낙엽 폭죽: 단풍잎·은행잎이 터졌다가 흔들리며 떨어진다
+  for (let i = 0, n = lite ? 24 : 60; i < n; i++) {
+    const ginkgo = i % 3 === 0;
+    const leaf = el(doc, `ap-leaf ${ginkgo ? 'ginkgo' : 'maple'}`, root);
+    const angle = rand(Math.PI * 1.05, Math.PI * 1.95); // 위쪽 부채꼴로 터짐
+    const dist = rand(18, 48);
+    leaf.style.background = ginkgo ? pick(GINKGO_COLORS) : pick(MAPLE_COLORS);
+    vars(leaf, {
       '--tx': `${Math.cos(angle) * dist}cqw`,
-      '--ty': `${Math.sin(angle) * dist * 0.7 + 15}cqh`,
-      '--r': `${rand(-720, 720)}deg`,
-      '--d': `${rand(1.0, 1.5).toFixed(2)}s`,
-      '--delay': `${rand(0, 0.15).toFixed(2)}s`,
+      '--ty': `${Math.sin(angle) * dist * 0.9}cqh`,
+      '--sway': `${rand(-7, 7)}cqw`,
+      '--fall': `${rand(30, 55)}cqh`,
+      '--r': `${rand(-540, 540)}deg`,
+      '--s': rand(0.7, 1.3).toFixed(2),
+      '--d': `${rand(1.3, 1.7).toFixed(2)}s`,
+      '--delay': `${rand(0, 0.12).toFixed(2)}s`,
     });
   }
   caption(doc, root, '정답!');
@@ -110,7 +119,7 @@ function heartPart(doc: Document, ctx: PlayContext, offset: number, sfx: SfxFn, 
     const h = el(doc, 'ap-heart', row);
     if (i < ctx.livesAfter) h.innerHTML = heartSvg('full');
     else if (i < ctx.livesBefore) {
-      h.innerHTML = heartSvg('empty') + heartSvg('full') + heartSvg('half a full') + heartSvg('half b full');
+      h.innerHTML = heartSvg('empty') + heartSvg('full') + [1, 2, 3, 4].map((n) => heartSvg(`frag f${n}`)).join('');
       h.classList.add('ap-lost');
       lost.push(h);
     } else h.innerHTML = heartSvg('empty');
@@ -204,7 +213,7 @@ function infernoScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean
   return withFade(root, steps, DURATION.inferno);
 }
 
-// ───────── 천국 (구름 · 빛 · 문이 열림) ─────────
+// ───────── 천국 (가을 하늘 · 구름 · 빛 · 문이 열림 · 황금 낙엽) ─────────
 
 function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'heaven');
@@ -241,9 +250,23 @@ function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean)
       run: () => {
         gate.classList.add('open');
         sfx('sparkle');
-        for (let i = 0, n = lite ? 10 : 24; i < n; i++) {
-          const s = el(doc, 'ap-sparkle', root);
-          vars(s, { '--x': `${rand(5, 95)}%`, '--y': `${rand(5, 60)}%`, '--delay': `${rand(0, 1).toFixed(2)}s` });
+        // 문 주변에 황금빛 낙엽이 흩날린다
+        for (let i = 0, n = lite ? 8 : 20; i < n; i++) {
+          const ginkgo = i % 2 === 0;
+          const leaf = el(doc, `ap-drift ${ginkgo ? 'ginkgo' : 'maple'}`, root);
+          leaf.style.background = ginkgo ? pick(GINKGO_COLORS) : pick(['#D9682B', '#E89A3C'] as const);
+          vars(leaf, {
+            '--x': `${rand(22, 78)}%`,
+            '--sway': `${rand(3, 8) * (Math.random() < 0.5 ? -1 : 1)}cqw`,
+            '--r': `${rand(-360, 360)}deg`,
+            '--s': rand(0.7, 1.2).toFixed(2),
+            '--d': `${rand(2.2, 3.2).toFixed(2)}s`,
+            '--delay': `${rand(0, 1.2).toFixed(2)}s`,
+          });
+        }
+        for (let i = 0, n = lite ? 4 : 10; i < n; i++) {
+          const sp = el(doc, 'ap-sparkle', root);
+          vars(sp, { '--x': `${rand(30, 70)}%`, '--y': `${rand(15, 60)}%`, '--delay': `${rand(0, 1).toFixed(2)}s` });
         }
       },
     },
