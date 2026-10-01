@@ -316,3 +316,104 @@ describe('app 통합', () => {
     expect(state().progress).toBeNull();
   });
 });
+
+// ───────── 회귀 테스트 (3차 보고 버그 1~3) ─────────
+
+describe('회귀: app.ts 버그 수정', () => {
+  const failSaves = () =>
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+  const saved = () => JSON.parse(window.localStorage.getItem('malsseum-quiz/v1')!) as GameState;
+
+  it('버그3: 저장 실패 → 상태 반영 안 함, 메뉴를 닫아도 play 없음, 저장이 회복되면 다시 진행하고 notice 지움', () => {
+    bootAndStart();
+    const spy = failSaves();
+    actions().selectChoice(correctId());
+    expect(ui()).toMatchObject({ adminMenuOpen: true });
+    expect(ui().notice).toContain('저장에 실패');
+    expect(state().progress).toMatchObject({ phase: 'awaitingAnswer', passedCount: 0 });
+
+    actions().closeAdminMenu();
+    expect(fake.player.play).not.toHaveBeenCalled();
+    expect(state().progress!.phase).toBe('awaitingAnswer');
+
+    spy.mockRestore();
+    actions().selectChoice(correctId());
+    expect(state().progress).toMatchObject({ phase: 'correct', passedCount: 1 });
+    expect(saved().progress).toMatchObject({ phase: 'correct', passedCount: 1 });
+    expect(ui().notice).toBeNull();
+    expect(fake.player.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('버그3: 연출 완료 저장 실패 → 단계 유지, 메뉴를 닫으면 같은 연출을 다시 재생해 재시도', async () => {
+    bootAndStart();
+    actions().selectChoice(correctId());
+    const spy = failSaves();
+    await finish();
+    expect(state().progress).toMatchObject({ phase: 'correct', questionIndex: 0 });
+    expect(ui().adminMenuOpen).toBe(true);
+
+    spy.mockRestore();
+    actions().closeAdminMenu();
+    expect(fake.plays.map((p) => p.kind)).toEqual(['correct', 'correct']);
+    await finish();
+    expect(state().progress).toMatchObject({ phase: 'awaitingAnswer', questionIndex: 1, passedCount: 1 });
+    expect(ui().notice).toBeNull();
+  });
+
+  it('버그1: undoHistory가 빈 연출 단계에서 undo → 연출을 취소하지 않고 정상 종료', async () => {
+    bootAndStart();
+    actions().selectChoice(correctId());
+    const data = saved();
+    data.undoHistory = [];
+    window.localStorage.setItem('malsseum-quiz/v1', JSON.stringify(data));
+
+    boot();
+    actions().start();
+    actions().openAdminMenu();
+    actions().undo();
+    actions().closeAdminMenu();
+    await flush();
+    expect(fake.player.cancel).not.toHaveBeenCalled();
+    expect(fake.plays).toHaveLength(1);
+
+    await finish();
+    expect(state().progress).toMatchObject({ phase: 'awaitingAnswer', questionIndex: 1, passedCount: 1 });
+  });
+
+  it('버그1: 같은 runId 연출을 다시 재생해도 이전 재생의 늦은 cancelled가 새 재생을 끊지 않음', async () => {
+    bootAndStart();
+    actions().selectChoice(wrongId());
+    const first = lastPlay();
+    const spy = failSaves();
+    actions().resetRecords(); // cancel → 저장 실패로 상태 유지 → 같은 runId
+    actions().closeAdminMenu(); // 같은 연출 재재생 (이전 Promise의 then은 아직 실행 전)
+    spy.mockRestore();
+    expect(fake.plays).toHaveLength(2);
+    expect(lastPlay()).not.toBe(first);
+
+    await flush(); // 이전 재생의 'cancelled' 처리
+    await finish();
+    expect(state().progress).toMatchObject({ phase: 'awaitingAnswer', lives: 2 });
+  });
+
+  it('버그2: 메뉴를 연 채 12초가 지나도 animationStuck=false, 닫으면 다시 12초 감시', () => {
+    vi.useFakeTimers();
+    bootAndStart();
+    actions().selectChoice(correctId());
+    actions().openAdminMenu();
+    actions().setVolume(0.5); // 메뉴가 열린 동안 다른 update가 와도 pause는 한 번만
+    vi.advanceTimersByTime(13_000);
+    expect(ui().animationStuck).toBe(false);
+    expect(fake.player.pause).toHaveBeenCalledTimes(1);
+
+    actions().closeAdminMenu();
+    actions().setVolume(0.6);
+    expect(fake.player.resume).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(11_000);
+    expect(ui().animationStuck).toBe(false);
+    vi.advanceTimersByTime(2_000);
+    expect(ui().animationStuck).toBe(true);
+  });
+});
