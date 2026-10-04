@@ -8,17 +8,15 @@
 - `npm run dev` 개발 서버(dream-f4가 1개만 띄움, 포트 5173) · `npm run typecheck` · `npm test`
 - 영상 자료: `public/media/{correct,wrong,heaven,inferno}.mp4` (없으면 CSS 대체 연출)
 
-## 모듈과 담당
+## 모듈과 담당 (2차: 꿈·기차 픽셀아트 개편)
 
-| 폴더 | 모듈 | 담당 세션 |
+| 폴더 | 모듈 | 담당 |
 |---|---|---|
-| `src/types.ts` | 공용 타입(계약) | **dream-3c** (리드) |
-| `src/app/`, `src/main.ts` | 모듈 연결, UiState, 연출 루프, 저장 호출 | **dream-3c** |
-| `src/core/` | GameEngine, Undo, 리더보드 | **dream-20** |
-| `src/content/` | ContentValidator | **dream-20** |
-| `src/storage/` | GameStorage | **dream-20** |
-| `src/ui/`, `index.html`의 스타일 | ScreenLayer + 디자인 시스템 | **dream-f4** |
-| `docs/design/` (레퍼런스), `src/animation/`, `public/media/` | 레퍼런스 조사 → AnimationPlayer 연출 | **9d10c602** |
+| `src/types.ts`, `src/app/`, `src/main.ts`, `src/core/`, `src/content/`, `src/storage/`, `data/` | 계약, 연결, 게임 로직, 데이터 | **리드** |
+| `src/ui/`, `index.html`의 스타일 | 화면 (시작·기차역·기차 안 문제 화면은 픽셀아트) | **픽셀 UI 담당** |
+| `src/animation/`, `public/media/` | 꿈 인트로, 정답·오답·하트, 천국·불구덩이 엔딩(대사 후 클릭 대기), 8비트 효과음 | **연출 담당** |
+
+흐름: 팀 선택 → `startChallenge` (phase `choosingTrack`, 행사 첫 도전이면 app이 `intro` 연출) → 기차역에서 `selectTrack(setId)` → `awaitingAnswer` … 다른 팀이 고른 세트(`team.questionSetId`)는 `availableSetIds`에서 빠진다. 말씀 선택도 Undo 대상.
 
 각 모듈의 함수 시그니처와 동작 규칙은 해당 파일 상단 주석에 있다. 시그니처는 계약이므로 바꾸지 말 것.
 
@@ -36,7 +34,7 @@ UI(actions 호출) ──▶ app ──▶ core 순수 함수(state → newState
 - UI는 state를 직접 바꾸지 않는다.
 
 ## 샘플 데이터
-`data/sample-content.json` — 8세트 × 5문제. 문제 q의 정답은 보기 `(q % 5) + 1`번 (1번 문제→2번 보기, 5번 문제→1번 보기).
+`data/sample-content.json` — 10세트 × 5문제. 모든 문제의 정답은 **2번 보기** (테스트용).
 
 ## 협업 규칙 (모든 세션 필수)
 1. **자기 담당 폴더만 수정한다.** 다른 폴더나 `src/types.ts` 변경이 필요하면 dream-3c에게 SendMessage로 요청.

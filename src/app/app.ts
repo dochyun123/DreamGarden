@@ -5,7 +5,7 @@ import { parseContentCsv } from '../content/csv';
 import { parseContentFile, validateTeamDrafts } from '../content/validator';
 import * as engine from '../core/engine';
 import { createGameStorage, type GameStorage } from '../storage/storage';
-import type { ContentFile, GameState } from '../types';
+import type { AnimationKind, ContentFile, GameState } from '../types';
 import { mountUi, type UiActions, type UiState } from '../ui/ui';
 
 /** 연출이 이 시간보다 길어지면 관리자에게 '연출 건너뛰기'를 강조한다 */
@@ -26,10 +26,16 @@ export function bootstrap(root: HTMLElement): void {
     issues: [],
     animationStuck: false,
     isFullscreen: false,
+    introPlaying: false,
   };
+  /** 꿈 인트로를 이 페이지에서 이미 보여줬는가 — 행사 첫 도전 시작 때 한 번만 */
+  let introShown = false;
 
-  /** 현재 재생 중인 연출 (없으면 null). token은 play 호출마다 고유 — 같은 runId 재재생 시 이전 콜백 구분용 */
-  let playing: { token: number; runId: number } | null = null;
+  /**
+   * 현재 재생 중인 연출 (없으면 null). token은 play 호출마다 고유 — 같은 runId 재재생 시 이전 콜백 구분용.
+   * runId가 'intro'면 꿈 인트로 (엔진 진행과 무관).
+   */
+  let playing: { token: number; runId: number | 'intro' } | null = null;
   let nextToken = 0;
   let playerPaused = false;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
@@ -79,8 +85,21 @@ export function bootstrap(root: HTMLElement): void {
       update();
     },
     startChallenge(teamId) {
+      const first = state.results.length === 0;
       const next = engine.startChallenge(state, teamId);
-      if (next !== state && commit(next)) ui.view = 'question';
+      if (next !== state && commit(next)) {
+        ui.view = 'question';
+        // 행사 첫 도전: 꿈 인트로 → 눈을 떠보니 기차역
+        if (first && !introShown) {
+          introShown = true;
+          ui.introPlaying = true;
+        }
+      }
+      update();
+    },
+    selectTrack(questionSetId) {
+      if (!ui.started || ui.adminMenuOpen || ui.introPlaying || ui.view !== 'question') return;
+      commit(engine.selectTrack(state, questionSetId));
       update();
     },
     selectChoice(choiceId) {
@@ -100,7 +119,10 @@ export function bootstrap(root: HTMLElement): void {
       const next = engine.undo(state);
       if (next !== state) {
         cancelAnimation();
+        ui.introPlaying = false;
         commit(next);
+        // 첫 도전 시작을 취소했다면(아직 아무 기록도 없음) 다음 시작 때 인트로를 다시 보여준다
+        if (!state.progress && state.results.length === 0) introShown = false;
         if (state.progress) ui.view = 'question';
         else if (ui.view === 'question') ui.view = 'teams';
       }
@@ -119,6 +141,8 @@ export function bootstrap(root: HTMLElement): void {
     },
     resetRecords() {
       cancelAnimation();
+      ui.introPlaying = false;
+      introShown = false;
       if (commit(engine.resetRecords(state))) ui.view = 'teams';
       update();
     },
@@ -165,23 +189,31 @@ export function bootstrap(root: HTMLElement): void {
     syncAnimation();
   }
 
-  /** 상태의 phase와 실제 재생 중인 연출을 맞춘다. 판정은 하지 않고 완료 신호만 엔진에 전달. */
+  /** 상태의 phase(또는 꿈 인트로)와 실제 재생 중인 연출을 맞춘다. 판정은 하지 않고 완료 신호만 엔진에 전달. */
   function syncAnimation(): void {
     const progress = state.progress;
-    const kind = progress ? engine.animationForPhase(progress.phase) : null;
+    let kind: AnimationKind | null = null;
+    let runId: number | 'intro' | null = null;
+    if (ui.introPlaying) {
+      kind = 'intro';
+      runId = 'intro';
+    } else if (progress) {
+      kind = engine.animationForPhase(progress.phase);
+      runId = progress.runId;
+    }
     const paused = !ui.started || ui.adminMenuOpen || ui.view !== 'question';
 
-    if (!progress || !kind) {
+    if (!kind || runId === null) {
       if (playing) cancelAnimation();
       return;
     }
-    if (playing?.runId === progress.runId) {
+    if (playing?.runId === runId) {
       if (paused && !playerPaused) {
         player.pause();
         clearTimeout(watchdog); // 일시정지 중에는 '멈춤' 판정하지 않음
       } else if (!paused && playerPaused) {
         player.resume();
-        armWatchdog(playing.token);
+        armWatchdog(playing.token, kind);
       }
       playerPaused = paused;
       return;
@@ -189,19 +221,18 @@ export function bootstrap(root: HTMLElement): void {
     if (playing) cancelAnimation();
     if (paused) return; // 메뉴를 닫거나 문제 화면으로 돌아오면 재생
 
-    const runId = progress.runId;
     const token = ++nextToken;
-    const team = state.teams.find((t) => t.id === progress.activeTeamId);
+    const team = progress && state.teams.find((t) => t.id === progress.activeTeamId);
     playing = { token, runId };
     playerPaused = false;
-    armWatchdog(token);
+    armWatchdog(token, kind);
 
     void player
       .play(kind, {
         teamName: team?.name ?? '',
         scriptureReference: state.questionSets.find((s) => s.id === team?.questionSetId)?.scriptureReference,
-        livesBefore: kind === 'wrong' ? progress.lives + 1 : progress.lives,
-        livesAfter: progress.lives,
+        livesBefore: progress ? (kind === 'wrong' ? progress.lives + 1 : progress.lives) : 0,
+        livesAfter: progress?.lives ?? 0,
       })
       .then((reason) => {
         if (playing?.token !== token) return; // 취소됐거나 다른 재생으로 대체됨
@@ -209,15 +240,18 @@ export function bootstrap(root: HTMLElement): void {
         clearTimeout(watchdog);
         ui.animationStuck = false;
         if (reason === 'cancelled') return;
+        if (runId === 'intro') ui.introPlaying = false;
         // runId가 다르면 엔진이 무시한다 (Undo 후 늦게 도착한 신호)
-        commit(engine.completeAnimation(state, runId));
+        else commit(engine.completeAnimation(state, runId));
         update();
       });
   }
 
   /** 재생(또는 재개) 시점부터 일정 시간 안에 끝나지 않으면 관리자에게 건너뛰기를 강조 */
-  function armWatchdog(token: number): void {
+  function armWatchdog(token: number, kind: AnimationKind): void {
     clearTimeout(watchdog);
+    // 인트로·엔딩은 대사 후 클릭을 기다리므로 '멈춤' 판정하지 않는다
+    if (kind === 'intro' || kind === 'heaven' || kind === 'inferno') return;
     watchdog = setTimeout(() => {
       if (playing?.token === token) {
         ui.animationStuck = true;

@@ -1,19 +1,46 @@
-// 영상이 없을 때 쓰는 CSS 대체 연출. 장면 = DOM 트리 + 시간표(steps) + 전체 길이.
+// 영상이 없을 때 쓰는 픽셀아트 대체 연출. 장면 = DOM 트리 + 시간표(steps) + 길이(+ 선택: 대사).
 // 시간표는 플레이어의 PausableClock이 실행하므로 일시정지·취소가 그대로 적용된다.
+// 주인공은 보이지 않는다 (1인칭 시점). 모든 그림은 pixel.ts의 crispEdges SVG와 steps() 애니메이션.
 import type { AnimationKind } from '../types';
 import { STARTING_LIVES } from '../types';
 import type { PlayContext } from './player';
+import {
+  CLOUD_PAL,
+  CLOUD_ROWS,
+  FLAME_PAL,
+  FLAME_ROWS,
+  gridRects,
+  HEART_EMPTY,
+  HEART_FULL,
+  HEART_ROWS,
+  rectsSvg,
+  sprite,
+  STAR_PAL,
+  STAR_ROWS,
+  type Rect,
+} from './pixel';
 import type { SfxName } from './sfx';
 
+/**
+ * 장면 길이(ms). intro/heaven/inferno는 이 시간 뒤 대사 상자가 나오고, 클릭할 때까지 기다린다.
+ */
 export const DURATION = {
+  intro: 3600,
   correct: 1800,
   wrongCaption: 1200,
   heart: 700,
-  inferno: 5000,
-  heaven: 5000,
+  heaven: 4200,
+  inferno: 4400,
 } as const;
 
-const FADE_MS = 350;
+/** 장면이 끝난 뒤 나오는 대사 (클릭으로 넘김) */
+export const DIALOGUE = {
+  intro: ['…여기가 어디지? 기차역…?'],
+  heaven: ['천국은… 진짜 있었어!', '말씀 암송 계속하고 싶다!'],
+  inferno: ['헉…! 꿈이었구나…', '말씀 암송 해야겠다…'],
+} as const;
+
+const FADE_MS = 300;
 
 export interface SceneStep {
   at: number;
@@ -24,13 +51,11 @@ export interface Scene {
   root: HTMLElement;
   steps: SceneStep[];
   duration: number;
+  /** 있으면 duration 뒤 대사 상자 → 마지막 줄에서 클릭하면 끝 (자동 종료 없음) */
+  dialogue?: readonly string[];
 }
 
 export type SfxFn = (name: SfxName) => void;
-
-const HEART_PATH =
-  'M12 21s-7.5-4.6-9.6-9.1C.9 8.6 2.7 4.5 6.6 4.5c2.2 0 3.7 1.2 5.4 3.2 1.7-2 3.2-3.2 5.4-3.2 3.9 0 5.7 4.1 4.2 7.4C19.5 16.4 12 21 12 21z';
-const heartSvg = (cls: string) => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${HEART_PATH}"/></svg>`;
 
 function el(doc: Document, cls: string, parent?: HTMLElement, text?: string): HTMLElement {
   const e = doc.createElement('div');
@@ -40,27 +65,24 @@ function el(doc: Document, cls: string, parent?: HTMLElement, text?: string): HT
   return e;
 }
 
-function caption(doc: Document, parent: HTMLElement, big: string, sub?: string): HTMLElement {
+function html(doc: Document, cls: string, markup: string, parent?: HTMLElement): HTMLElement {
+  const e = el(doc, cls, parent);
+  e.innerHTML = markup; // pixel.ts가 만든 SVG만 넣는다 (사용자 입력 없음)
+  return e;
+}
+
+function caption(doc: Document, parent: HTMLElement, big: string): HTMLElement {
   const c = el(doc, 'ap-caption', parent);
   const b = doc.createElement('span');
   b.className = 'ap-big';
   b.textContent = big;
   c.appendChild(b);
-  if (sub) {
-    const s = doc.createElement('span');
-    s.className = 'ap-sub';
-    s.textContent = sub;
-    c.appendChild(s);
-  }
   return c;
 }
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
-const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
-
-// 가을 팔레트 — 주황·단풍 빨강·황금·갈색
-const MAPLE_COLORS = ['#D9682B', '#E2553B', '#C8442F', '#E89A3C', '#8B5A2B'] as const;
-const GINKGO_COLORS = ['#FFCF6B', '#F2B544', '#E8B04A'] as const;
+/** 픽셀 격자에 맞춘 난수 (cq 단위를 정수로) */
+const randi = (a: number, b: number) => Math.round(rand(a, b));
 
 function vars(e: HTMLElement, v: Record<string, string>): void {
   for (const [k, val] of Object.entries(v)) e.style.setProperty(k, val);
@@ -77,32 +99,170 @@ function withFade(root: HTMLElement, steps: SceneStep[], duration: number): Scen
   return { root, steps, duration };
 }
 
+/** 눈꺼풀(위·아래 검은 막). open: 0(감음)~1(완전히 뜸) */
+function eyelids(doc: Document, parent: HTMLElement) {
+  const top = el(doc, 'ap-lid top', parent);
+  const bot = el(doc, 'ap-lid bot', parent);
+  return (open: number, snap = false) => {
+    const h = `${Math.round((1 - open) * 50)}%`;
+    for (const l of [top, bot]) {
+      l.classList.toggle('snap', snap);
+      l.style.height = h;
+    }
+  };
+}
+
+function stars(doc: Document, parent: HTMLElement, n: number, cls: string): void {
+  for (let i = 0; i < n; i++) {
+    const s = html(doc, `ap-star ${cls}`, sprite(STAR_ROWS, STAR_PAL), parent);
+    vars(s, {
+      '--x': `${randi(10, 90)}%`,
+      '--y': `${randi(10, 70)}%`,
+      '--tx': `${randi(-40, 40)}cqw`,
+      '--ty': `${randi(-40, 30)}cqh`,
+      '--delay': `${rand(0, 1).toFixed(2)}s`,
+    });
+  }
+}
+
+// ───────── 배경 그림 (160×90 픽셀 격자) ─────────
+
+const FONT = `font-family="ApGalmuri,Galmuri11,monospace" font-weight="700"`;
+
+/** 지하 기차역 승강장 */
+function stationSvg(): string {
+  const r: Rect[] = [[0, 0, 160, 62, '#2F3446']];
+  for (let y = 8; y < 62; y += 6) {
+    r.push([0, y, 160, 1, '#262A39']);
+    for (let x = (y / 2) % 2 ? 4 : 0; x < 160; x += 8) r.push([x, y, 1, 6, '#2A2F40']);
+  }
+  r.push([0, 40, 160, 3, '#3FA7A0']); // 노선 색 띠
+  r.push([0, 0, 160, 8, '#1B1E29']); // 천장
+  for (const x of [8, 48, 92, 132]) r.push([x, 8, 20, 2, '#FFF3C4'], [x - 2, 10, 24, 3, 'rgba(255,243,196,.16)']);
+  for (const x of [20, 136]) r.push([x, 8, 6, 54, '#4A5068'], [x, 8, 1, 54, '#666E8C'], [x + 5, 8, 1, 54, '#383D50']);
+  r.push([58, 16, 44, 15, '#E8E8E8'], [59, 17, 42, 13, '#1D3A6E']); // 역 이름판
+  r.push([108, 18, 16, 20, '#7A3B2E'], [109, 19, 14, 18, '#C96A4A'], [111, 21, 10, 8, '#F0C27B']); // 포스터
+  r.push([34, 50, 18, 2, '#6E4520'], [34, 54, 18, 2, '#8A5A2B'], [35, 56, 1, 6, '#3A2A1A'], [50, 56, 1, 6, '#3A2A1A']); // 벤치
+  r.push([0, 62, 160, 9, '#8B8F9C'], [0, 62, 160, 1, '#A7ABB7']); // 승강장 바닥
+  for (let x = 6; x < 160; x += 12) r.push([x, 63, 1, 6, '#7C808D']);
+  r.push([0, 69, 160, 2, '#E8C547']); // 노란 안전선
+  for (let x = 1; x < 160; x += 4) r.push([x, 69, 2, 1, '#C9A73A']);
+  r.push([0, 71, 160, 3, '#5B5E6A'], [0, 74, 160, 16, '#14151C']); // 선로
+  for (let x = 2; x < 160; x += 8) r.push([x, 81, 4, 4, '#3A2A1E']);
+  r.push([0, 80, 160, 1, '#9AA0AC'], [0, 86, 160, 1, '#9AA0AC']);
+  const sign = `<text x="80" y="27" font-size="9" text-anchor="middle" fill="#FFFFFF" ${FONT}>꿈역</text>`;
+  return rectsSvg(160, 90, r, 'ap-bg', 'slice', sign);
+}
+
+/** 내 방 천장 (악몽에서 깼을 때) */
+function ceilingSvg(): string {
+  const r: Rect[] = [];
+  for (let y = 0, i = 0; y < 90; y += 10, i++) {
+    r.push([0, y, 160, 10, i % 2 ? '#BC8F5E' : '#C99D6B'], [0, y + 9, 160, 1, '#8E6640']);
+    for (let x = i % 2 ? 30 : 70; x < 160; x += 80) r.push([x, y, 1, 9, '#A47A4E']);
+  }
+  r.push([0, 40, 160, 6, '#7A5332'], [0, 40, 160, 1, '#946742']); // 들보
+  for (let i = 0; i < 8; i++) r.push([98 + i * 3, 50 + i * 4, 34, 4, 'rgba(255,240,190,.3)']); // 창문 햇빛
+  r.push([79, 0, 2, 18, '#3A2A1E'], [72, 18, 16, 2, '#E7D9B5'], [70, 20, 20, 2, '#E7D9B5'], [68, 22, 24, 3, '#D8C79E']);
+  r.push([77, 25, 6, 3, '#FFF6C8']);
+  return rectsSvg(160, 90, r, 'ap-bg', 'slice');
+}
+
+/**
+ * 추락하는 벽돌 우물 160×102 — 12칸(벽돌 두 줄)마다 무늬가 반복되므로
+ * CSS가 12칸만큼 위로 올렸다가 되돌리면 끝없이 떨어지는 것처럼 보인다.
+ */
+function shaftSvg(): string {
+  const r: Rect[] = [[0, 0, 160, 102, '#4A2018']];
+  for (let y = 0, i = 0; y < 102; y += 6, i++) {
+    r.push([0, y + 5, 160, 1, '#1E0C08']);
+    for (let x = i % 2 ? 0 : 7; x < 160; x += 14) r.push([x, y, 1, 5, '#1E0C08'], [x + 1, y, 13, 1, '#6A2E22']);
+  }
+  // 가장자리를 어둡게 → 둥근 구멍 안쪽처럼
+  for (const [w, c] of [[28, 'rgba(0,0,0,.25)'], [16, 'rgba(0,0,0,.3)'], [7, 'rgba(0,0,0,.35)']] as const) {
+    r.push([0, 0, w, 102, c], [160 - w, 0, w, 102, c]);
+  }
+  return rectsSvg(160, 102, r, 'ap-bg', 'none');
+}
+
+/** 천국 하늘 (계단식 색 띠) */
+function skySvg(): string {
+  const bands = ['#4FA8F0', '#6BBBF5', '#8DCDF8', '#B3DEFA', '#D9EEF8', '#FFF4D6', '#FFE7A8', '#FFD98A'];
+  const r: Rect[] = bands.map((c, i) => [0, i * 12, 160, 12, c] as Rect);
+  r.push(...gridRects(CLOUD_ROWS, CLOUD_PAL, 12, 14), ...gridRects(CLOUD_ROWS, CLOUD_PAL, 128, 24));
+  return rectsSvg(160, 90, r, 'ap-bg', 'slice');
+}
+
+/** 천국 문틀 28×32: 기둥 + 계단식 아치 */
+function gateFrameSvg(): string {
+  const outer = [[8, 19], [5, 22], [3, 24], [2, 25], [1, 26], [0, 27]];
+  const inner = [null, null, [8, 19], [6, 21], [5, 22], [4, 23]];
+  const rows: string[] = [];
+  for (let y = 0; y < 32; y++) {
+    let row = '';
+    for (let x = 0; x < 28; x++) {
+      let c = '.';
+      if (y < 6) {
+        const [a, b] = outer[y];
+        const inn = inner[y];
+        if (x >= a && x <= b && !(inn && x >= inn[0] && x <= inn[1])) c = y === 0 || x === a || x === b ? 'h' : 'G';
+      } else if (x < 4 || x >= 24) c = x === 0 || x === 27 ? 'd' : x === 1 || x === 24 ? 'h' : 'G';
+      row += c;
+    }
+    rows.push(row);
+  }
+  return sprite(rows, { G: '#E0A91B', h: '#FFE37A', d: '#9A6A0A' }, 'ap-gate-frame');
+}
+
+/** 문짝 10×26: 금빛 창살 */
+function doorSvg(): string {
+  const rows: string[] = [];
+  for (let y = 0; y < 26; y++) {
+    let row = '';
+    for (let x = 0; x < 10; x++) {
+      if (x === 0 || x === 9 || y === 0 || y === 25) row += 'G';
+      else if (y === 8 || y === 17) row += 'g';
+      else row += x % 2 === 0 ? 'g' : '.';
+    }
+    rows.push(row);
+  }
+  return sprite(rows, { G: '#B8860B', g: '#FFD34D' });
+}
+
+// ───────── 인트로: 깊은 꿈 → 눈 뜸 → 지하 기차역 ─────────
+
+function introScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
+  const root = sceneRoot(doc, 'intro');
+  const station = html(doc, 'ap-station', stationSvg(), root);
+  const lids = eyelids(doc, root);
+  lids(0);
+  // 눈을 감은 어둠 속 꿈의 반짝임 (눈꺼풀 위에 보인다)
+  stars(doc, root, lite ? 4 : 10, 'ap-dream');
+  const steps: SceneStep[] = [
+    { at: 0, run: () => sfx('intro') },
+    { at: 900, run: () => lids(0.25) },
+    { at: 1400, run: () => lids(0) },
+    { at: 1800, run: () => lids(0.6) },
+    { at: 2200, run: () => lids(0.1) },
+    {
+      at: 2500,
+      run: () => {
+        lids(1);
+        station.classList.add('clear');
+        root.classList.add('awake');
+      },
+    },
+  ];
+  return { root, steps, duration: DURATION.intro, dialogue: DIALOGUE.intro };
+}
+
 // ───────── 정답 ─────────
 
 function correctScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'correct');
   el(doc, 'ap-dim', root);
   el(doc, 'ap-flash', root);
-  el(doc, 'ap-beam l', root);
-  el(doc, 'ap-beam r', root);
-  // 낙엽 폭죽: 단풍잎·은행잎이 터졌다가 흔들리며 떨어진다
-  for (let i = 0, n = lite ? 24 : 60; i < n; i++) {
-    const ginkgo = i % 3 === 0;
-    const leaf = el(doc, `ap-leaf ${ginkgo ? 'ginkgo' : 'maple'}`, root);
-    const angle = rand(Math.PI * 1.05, Math.PI * 1.95); // 위쪽 부채꼴로 터짐
-    const dist = rand(18, 48);
-    leaf.style.background = ginkgo ? pick(GINKGO_COLORS) : pick(MAPLE_COLORS);
-    vars(leaf, {
-      '--tx': `${Math.cos(angle) * dist}cqw`,
-      '--ty': `${Math.sin(angle) * dist * 0.9}cqh`,
-      '--sway': `${rand(-7, 7)}cqw`,
-      '--fall': `${rand(30, 55)}cqh`,
-      '--r': `${rand(-540, 540)}deg`,
-      '--s': rand(0.7, 1.3).toFixed(2),
-      '--d': `${rand(1.3, 1.7).toFixed(2)}s`,
-      '--delay': `${rand(0, 0.12).toFixed(2)}s`,
-    });
-  }
+  stars(doc, root, lite ? 8 : 18, 'ap-burst');
   caption(doc, root, '정답!');
   return withFade(root, [{ at: 0, run: () => sfx('correct') }], DURATION.correct);
 }
@@ -112,27 +272,27 @@ function correctScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
 function heartPart(doc: Document, ctx: PlayContext, offset: number, sfx: SfxFn, root: HTMLElement): SceneStep[] {
   const box = el(doc, 'ap-hearts');
   box.dataset.part = 'hearts';
-  const row = el(doc, 'ap-heart-row', box);
   const slots = Math.max(STARTING_LIVES, ctx.livesBefore);
+  const full = sprite(HEART_ROWS, HEART_FULL);
+  const empty = sprite(HEART_ROWS, HEART_EMPTY);
   const lost: HTMLElement[] = [];
   for (let i = 0; i < slots; i++) {
-    const h = el(doc, 'ap-heart', row);
-    if (i < ctx.livesAfter) h.innerHTML = heartSvg('full');
+    const h = el(doc, 'ap-heart', box);
+    if (i < ctx.livesAfter) h.innerHTML = full;
     else if (i < ctx.livesBefore) {
-      h.innerHTML = heartSvg('empty') + heartSvg('full') + [1, 2, 3, 4].map((n) => heartSvg(`frag f${n}`)).join('');
+      // 빈 하트 위에 두 쪽(왼쪽·오른쪽)으로 나뉜 하트 → 금이 가며 갈라져 떨어진다
+      h.innerHTML = empty + `<div class="ap-half l">${full}</div><div class="ap-half r">${full}</div>`;
       h.classList.add('ap-lost');
       lost.push(h);
-    } else h.innerHTML = heartSvg('empty');
+    } else h.innerHTML = empty;
   }
-  const label = el(doc, 'ap-lives', box, `목숨 ${ctx.livesBefore}개`);
   return [
     { at: offset, run: () => root.appendChild(box) },
     {
       at: offset + 200,
       run: () => {
         for (const h of lost) h.classList.add('ap-break');
-        if (lost.length) sfx('heartPop');
-        label.textContent = `목숨 ${ctx.livesAfter}개`;
+        if (lost.length) sfx('heartBreak');
       },
     },
   ];
@@ -151,154 +311,147 @@ function wrongScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
   el(doc, 'ap-dim', root);
   el(doc, 'ap-flash', root);
   const shake = el(doc, 'ap-shake', root);
-  const cap = caption(doc, shake, '땡!', ctx.livesAfter > 0 ? '아쉬워요! 다시 도전!' : '목숨을 모두 잃었어요');
+  const cap = caption(doc, shake, '오답');
   cap.dataset.part = 'caption';
   const steps: SceneStep[] = [
-    { at: 0, run: () => sfx('buzzer') },
-    { at: DURATION.wrongCaption - 250, run: () => cap.classList.add('ap-hide') },
+    { at: 0, run: () => sfx('wrong') },
+    { at: DURATION.wrongCaption - 200, run: () => cap.classList.add('ap-hide') },
     { at: DURATION.wrongCaption, run: () => cap.remove() },
     ...heartPart(doc, ctx, DURATION.wrongCaption, sfx, root),
   ];
   return withFade(root, steps, DURATION.wrongCaption + DURATION.heart);
 }
 
-// ───────── 불구덩이 (만화풍 추락 + 불꽃) ─────────
-
-function infernoScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean): Scene {
-  const root = sceneRoot(doc, 'inferno');
-  const rumble = el(doc, 'ap-rumble', root);
-  const card = el(doc, 'ap-card', rumble, ctx.teamName);
-  const fire = el(doc, 'ap-fire');
-  const flames = lite ? 8 : 14;
-  for (let i = 0; i < flames; i++) {
-    const f = el(doc, 'ap-flame', fire);
-    vars(f, {
-      '--x': `${(i * 104) / flames - 4 + rand(-2, 2)}%`,
-      '--w': `${rand(12, 20)}cqw`,
-      '--h': `${rand(30, 58)}cqh`,
-      '--d': `${rand(0.25, 0.5).toFixed(2)}s`,
-      '--delay': `${rand(0, 0.3).toFixed(2)}s`,
-    });
-  }
-  for (let i = 0, n = lite ? 12 : 40; i < n; i++) {
-    const e = el(doc, 'ap-ember', fire);
-    vars(e, {
-      '--x': `${rand(5, 95)}%`,
-      '--tx': `${rand(-8, 8)}cqw`,
-      '--d': `${rand(1.2, 2.4).toFixed(2)}s`,
-      '--delay': `${rand(0, 1.2).toFixed(2)}s`,
-    });
-  }
-  const steps: SceneStep[] = [
-    { at: 0, run: () => sfx('rumble') },
-    { at: 600, run: () => rumble.appendChild(el(doc, 'ap-pit')) },
-    {
-      at: 800,
-      run: () => {
-        card.classList.add('ap-fall');
-        sfx('whistle');
-      },
-    },
-    {
-      at: 2100,
-      run: () => {
-        root.appendChild(fire);
-        fire.classList.add('on');
-        sfx('thud');
-        sfx('sizzle');
-      },
-    },
-    { at: 2300, run: () => caption(doc, root, '불구덩이에 빠졌어요!', `${ctx.teamName} 도전 종료`) },
-  ];
-  return withFade(root, steps, DURATION.inferno);
-}
-
-// ───────── 천국 (가을 하늘 · 구름 · 빛 · 문이 열림 · 황금 낙엽) ─────────
+// ───────── 천국 (픽셀 하늘 · 구름 · 빛 · 문이 열림) → 대사 ─────────
 
 function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'heaven');
-  el(doc, 'ap-sky', root);
+  html(doc, 'ap-sky', skySvg(), root);
   const rays = el(doc, 'ap-rays', root);
+  for (let i = 0; i < 5; i++) vars(el(doc, 'ap-ray', rays), { '--x': `${30 + i * 9}%`, '--delay': `${i * 0.15}s` });
   const gate = el(doc, 'ap-gate', root);
-  el(doc, 'ap-gate-glow', gate);
-  el(doc, 'ap-door l', gate);
-  el(doc, 'ap-door r', gate);
-  const clouds = [
-    [-8, 40, 22, 0],
-    [18, 34, 18, 0.15],
-    [40, 46, 24, 0.05],
-    [66, 36, 20, 0.2],
-    [84, 42, 22, 0.1],
-  ];
-  const cloudEls = clouds.map(([x, w, h, d]) => {
-    const c = el(doc, 'ap-cloud');
-    vars(c, { '--x': `${x}cqw`, '--w': `${w}cqw`, '--h': `${h}cqh`, '--delay': `${d}s` });
-    return c;
-  });
+  el(doc, 'ap-gate-light', gate);
+  html(doc, 'ap-door l', doorSvg(), gate);
+  html(doc, 'ap-door r', doorSvg(), gate);
+  html(doc, 'ap-gate-frame-wrap', gateFrameSvg(), gate);
+  const clouds = el(doc, 'ap-clouds');
+  for (const [x, w, d] of [[-4, 30, 0], [22, 24, 0.1], [48, 32, 0.05], [76, 28, 0.15]]) {
+    const c = html(doc, 'ap-cloud', sprite(CLOUD_ROWS, CLOUD_PAL), clouds);
+    vars(c, { '--x': `${x}cqw`, '--w': `${w}cqw`, '--delay': `${d}s` });
+  }
   const steps: SceneStep[] = [
-    { at: 0, run: () => sfx('heavenPad') },
-    { at: 300, run: () => cloudEls.forEach((c) => root.appendChild(c)) },
+    { at: 300, run: () => root.appendChild(clouds) },
     {
-      at: 1100,
+      at: 900,
       run: () => {
         rays.classList.add('on');
         gate.classList.add('on');
       },
     },
     {
-      at: 2000,
+      at: 1700,
       run: () => {
         gate.classList.add('open');
-        sfx('sparkle');
-        // 문 주변에 황금빛 낙엽이 흩날린다
-        for (let i = 0, n = lite ? 8 : 20; i < n; i++) {
-          const ginkgo = i % 2 === 0;
-          const leaf = el(doc, `ap-drift ${ginkgo ? 'ginkgo' : 'maple'}`, root);
-          leaf.style.background = ginkgo ? pick(GINKGO_COLORS) : pick(['#D9682B', '#E89A3C'] as const);
-          vars(leaf, {
-            '--x': `${rand(22, 78)}%`,
-            '--sway': `${rand(3, 8) * (Math.random() < 0.5 ? -1 : 1)}cqw`,
-            '--r': `${rand(-360, 360)}deg`,
-            '--s': rand(0.7, 1.2).toFixed(2),
-            '--d': `${rand(2.2, 3.2).toFixed(2)}s`,
-            '--delay': `${rand(0, 1.2).toFixed(2)}s`,
-          });
-        }
-        for (let i = 0, n = lite ? 4 : 10; i < n; i++) {
-          const sp = el(doc, 'ap-sparkle', root);
-          vars(sp, { '--x': `${rand(30, 70)}%`, '--y': `${rand(15, 60)}%`, '--delay': `${rand(0, 1).toFixed(2)}s` });
-        }
+        sfx('heaven');
+        stars(doc, root, lite ? 5 : 12, 'ap-twinkle');
       },
     },
     {
-      at: 2600,
+      at: 2400,
       run: () => {
-        const cap = caption(doc, root, '천국 입성!', `${ctx.teamName} · 5문제 모두 통과!`);
+        const cap = caption(doc, root, '천국 입성!');
         const ref = ctx.scriptureReference?.trim();
         if (ref) {
           const verse = doc.createElement('span');
           verse.className = 'ap-verse';
           verse.dataset.part = 'verse';
           verse.textContent = ref;
-          cap.insertBefore(verse, cap.querySelector('.ap-sub'));
-          cap.classList.add('has-verse');
+          cap.appendChild(verse);
         }
       },
     },
   ];
-  return withFade(root, steps, DURATION.heaven);
+  return { root, steps, duration: DURATION.heaven, dialogue: DIALOGUE.heaven };
 }
 
-/** lite: 저사양 모드 — 입자 수를 줄인다 (필터·회전 제거는 styles.ts의 .ap-lite) */
+// ───────── 불구덩이 (추락 → 불꽃 → 흔들리며 암전 → 악몽에서 깸) → 대사 ─────────
+
+function infernoScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
+  const root = sceneRoot(doc, 'inferno');
+  const shake = el(doc, 'ap-quake', root);
+  html(doc, 'ap-shaft', shaftSvg(), shake);
+  const glow = el(doc, 'ap-glow', shake);
+  const fire = el(doc, 'ap-fire');
+  const flames = lite ? 6 : 10;
+  const flame = sprite(FLAME_ROWS, FLAME_PAL);
+  for (let i = 0; i < flames; i++) {
+    const f = html(doc, 'ap-flame', flame, fire);
+    vars(f, {
+      '--x': `${Math.round((i * 104) / flames) - 4}%`,
+      '--w': `${randi(12, 18)}cqw`,
+      '--d': `${rand(0.25, 0.45).toFixed(2)}s`,
+    });
+  }
+  for (let i = 0, n = lite ? 8 : 20; i < n; i++) {
+    const e = el(doc, 'ap-ember', fire);
+    vars(e, { '--x': `${randi(3, 97)}%`, '--d': `${rand(0.9, 1.6).toFixed(2)}s`, '--delay': `${rand(0, 1).toFixed(2)}s` });
+  }
+  const black = el(doc, 'ap-black', root);
+  const room = html(doc, 'ap-room', ceilingSvg());
+  let lids: ReturnType<typeof eyelids> | null = null;
+  const steps: SceneStep[] = [
+    { at: 0, run: () => sfx('fall') },
+    { at: 400, run: () => glow.classList.add('on') },
+    {
+      at: 1100,
+      run: () => {
+        shake.appendChild(fire);
+        sfx('inferno');
+      },
+    },
+    {
+      at: 2400,
+      run: () => {
+        shake.classList.add('hard');
+        sfx('inferno');
+      },
+    },
+    { at: 2800, run: () => black.classList.add('on') },
+    {
+      at: 3500,
+      run: () => {
+        // 암전 속에서 방 장면 준비 → 눈을 번쩍 뜬다
+        shake.remove();
+        black.remove();
+        root.appendChild(room);
+        lids = eyelids(doc, root);
+        lids(0);
+      },
+    },
+    {
+      at: 3700,
+      run: () => {
+        lids?.(1, true);
+        room.classList.add('jolt');
+        sfx('wake');
+      },
+    },
+  ];
+  return { root, steps, duration: DURATION.inferno, dialogue: DIALOGUE.inferno };
+}
+
+/** lite: 저사양 모드 — 입자 수를 줄인다 (blur 제거 등은 styles.ts의 .ap-lite) */
 export function buildScene(kind: AnimationKind, doc: Document, ctx: PlayContext, sfx: SfxFn, lite = false): Scene {
   switch (kind) {
+    case 'intro':
+      return introScene(doc, sfx, lite);
     case 'correct':
       return correctScene(doc, sfx, lite);
     case 'wrong':
       return wrongScene(doc, ctx, sfx);
-    case 'inferno':
-      return infernoScene(doc, ctx, sfx, lite);
     case 'heaven':
       return heavenScene(doc, ctx, sfx, lite);
+    case 'inferno':
+      return infernoScene(doc, sfx, lite);
   }
 }

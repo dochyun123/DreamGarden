@@ -10,7 +10,6 @@ export interface Screen {
 
 export interface SetupRowDraft {
   name: string;
-  questionSetId: string;
 }
 
 /** UI 내부 전용 상태 — 페이지 번호, 하위 화면, 확인 모달 등 (app의 UiState와 별개) */

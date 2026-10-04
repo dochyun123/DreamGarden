@@ -99,15 +99,21 @@ function boot(): void {
   bootstrap(document.createElement('div'));
 }
 
-/** 팀 2개 등록 → 시작 버튼 → team-1 도전 시작 */
-function bootAndStart(): void {
+/** 팀 2개 등록 → 시작 버튼 → team-1 도전 시작 → 꿈 인트로 끝 → 기차역에서 set-1 선택. 인트로 재생 기록은 지운다 */
+async function bootAndStart(): Promise<void> {
   boot();
   actions().registerTeams([
-    { name: '믿음팀', questionSetId: 'set-1' },
-    { name: '소망팀', questionSetId: 'set-2' },
+    { name: '믿음팀' },
+    { name: '소망팀' },
   ]);
   actions().start();
   actions().startChallenge('team-1');
+  expect(lastPlay().kind).toBe('intro');
+  fake.current!.resolve('ended');
+  for (let i = 0; i < 5; i++) await Promise.resolve(); // 가짜 타이머에서도 동작하도록 마이크로태스크만 비운다
+  actions().selectTrack('set-1');
+  fake.plays = [];
+  Object.values(fake.player).forEach((f) => f.mockClear());
 }
 
 beforeEach(() => {
@@ -121,18 +127,18 @@ afterEach(() => {
 // ───────── 흐름 ─────────
 
 describe('app 통합', () => {
-  it('처음 실행: 저장이 없으면 setup 화면, 팀 등록 후 teams', () => {
+  it('처음 실행: 저장이 없으면 setup 화면, 팀 등록 후 teams', async () => {
     boot();
     expect(ui()).toMatchObject({ view: 'setup', started: false, hasSavedGame: false, notice: null });
-    actions().registerTeams([{ name: ' ', questionSetId: 'set-1' }]);
+    actions().registerTeams([{ name: ' ' }]);
     expect(ui().issues).toHaveLength(1);
     expect(state().teams).toEqual([]);
-    actions().registerTeams([{ name: '믿음팀', questionSetId: 'set-1' }]);
+    actions().registerTeams([{ name: '믿음팀' }]);
     expect(ui()).toMatchObject({ view: 'teams', issues: [] });
   });
 
   it('① 시작 → 도전 시작 → 정답 → play(correct) → ended → 다음 문제 대기', async () => {
-    bootAndStart();
+    await bootAndStart();
     expect(ui().view).toBe('question');
     expect(state().progress).toMatchObject({ phase: 'awaitingAnswer', questionIndex: 0 });
     expect(fake.player.play).not.toHaveBeenCalled();
@@ -154,7 +160,7 @@ describe('app 통합', () => {
   });
 
   it('② 연출 중 관리 메뉴 열기 → pause, 닫기 → resume, 메뉴가 열린 동안 답 입력 무시', async () => {
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(wrongId());
     expect(lastPlay().kind).toBe('wrong');
     expect(lastPlay().ctx).toMatchObject({ livesBefore: 3, livesAfter: 2 });
@@ -174,7 +180,7 @@ describe('app 통합', () => {
   });
 
   it('③ 연출 중 undo → cancel, 늦게 온 ended는 무시, 같은 문제 대기로 복원', async () => {
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(correctId());
     await finish();
     actions().selectChoice(wrongId());
@@ -202,7 +208,7 @@ describe('app 통합', () => {
   });
 
   it('④ 마지막 오답 → wrong → inferno → 끝나면 teams 화면, 결과 1개', async () => {
-    bootAndStart();
+    await bootAndStart();
     for (let i = 0; i < 2; i++) {
       actions().selectChoice(wrongId());
       await finish();
@@ -228,7 +234,7 @@ describe('app 통합', () => {
   });
 
   it('⑤ 연출 중 새로고침 → 이어하기 → 같은 연출 재생, 목숨·점수·기록 중복 없음', async () => {
-    bootAndStart();
+    await bootAndStart();
     for (let i = 0; i < 4; i++) {
       actions().selectChoice(correctId());
       await finish();
@@ -256,7 +262,7 @@ describe('app 통합', () => {
   });
 
   it('⑤-2 오답 연출 중 새로고침 → 목숨 중복 차감 없음', async () => {
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(wrongId());
     boot();
     actions().start();
@@ -266,8 +272,8 @@ describe('app 통합', () => {
     expect(state().progress).toMatchObject({ phase: 'awaitingAnswer', lives: 2, questionIndex: 0 });
   });
 
-  it('⑥ save 실패 → notice 설정, adminMenuOpen=true, 연출 시작하지 않음', () => {
-    bootAndStart();
+  it('⑥ save 실패 → notice 설정, adminMenuOpen=true, 연출 시작하지 않음', async () => {
+    await bootAndStart();
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError');
     });
@@ -277,7 +283,7 @@ describe('app 통합', () => {
     expect(fake.player.play).not.toHaveBeenCalled();
   });
 
-  it('⑥-2 저장된 데이터가 손상되면 새로 시작하고 notice로 알린다', () => {
+  it('⑥-2 저장된 데이터가 손상되면 새로 시작하고 notice로 알린다', async () => {
     window.localStorage.setItem('malsseum-quiz/v1', '{broken');
     boot();
     expect(ui().view).toBe('setup');
@@ -285,7 +291,7 @@ describe('app 통합', () => {
   });
 
   it('⑦ 연출 중 teams로 이동 → pause, returnToChallenge → resume', async () => {
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(correctId());
     actions().setView('teams');
     expect(fake.player.pause).toHaveBeenCalledTimes(1);
@@ -305,7 +311,7 @@ describe('app 통합', () => {
   });
 
   it('전체 기록 초기화 → 연출 취소, 팀 유지, 진행·결과·Undo 제거', async () => {
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(wrongId());
     actions().resetRecords();
     expect(fake.player.cancel).toHaveBeenCalled();
@@ -326,8 +332,8 @@ describe('회귀: app.ts 버그 수정', () => {
     });
   const saved = () => JSON.parse(window.localStorage.getItem('malsseum-quiz/v1')!) as GameState;
 
-  it('버그3: 저장 실패 → 상태 반영 안 함, 메뉴를 닫아도 play 없음, 저장이 회복되면 다시 진행하고 notice 지움', () => {
-    bootAndStart();
+  it('버그3: 저장 실패 → 상태 반영 안 함, 메뉴를 닫아도 play 없음, 저장이 회복되면 다시 진행하고 notice 지움', async () => {
+    await bootAndStart();
     const spy = failSaves();
     actions().selectChoice(correctId());
     expect(ui()).toMatchObject({ adminMenuOpen: true });
@@ -347,7 +353,7 @@ describe('회귀: app.ts 버그 수정', () => {
   });
 
   it('버그3: 연출 완료 저장 실패 → 단계 유지, 메뉴를 닫으면 같은 연출을 다시 재생해 재시도', async () => {
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(correctId());
     const spy = failSaves();
     await finish();
@@ -363,7 +369,7 @@ describe('회귀: app.ts 버그 수정', () => {
   });
 
   it('버그1: undoHistory가 빈 연출 단계에서 undo → 연출을 취소하지 않고 정상 종료', async () => {
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(correctId());
     const data = saved();
     data.undoHistory = [];
@@ -383,7 +389,7 @@ describe('회귀: app.ts 버그 수정', () => {
   });
 
   it('버그1: 같은 runId 연출을 다시 재생해도 이전 재생의 늦은 cancelled가 새 재생을 끊지 않음', async () => {
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(wrongId());
     const first = lastPlay();
     const spy = failSaves();
@@ -398,9 +404,9 @@ describe('회귀: app.ts 버그 수정', () => {
     expect(state().progress).toMatchObject({ phase: 'awaitingAnswer', lives: 2 });
   });
 
-  it('버그2: 메뉴를 연 채 12초가 지나도 animationStuck=false, 닫으면 다시 12초 감시', () => {
+  it('버그2: 메뉴를 연 채 12초가 지나도 animationStuck=false, 닫으면 다시 12초 감시', async () => {
     vi.useFakeTimers();
-    bootAndStart();
+    await bootAndStart();
     actions().selectChoice(correctId());
     actions().openAdminMenu();
     actions().setVolume(0.5); // 메뉴가 열린 동안 다른 update가 와도 pause는 한 번만
@@ -415,5 +421,67 @@ describe('회귀: app.ts 버그 수정', () => {
     expect(ui().animationStuck).toBe(false);
     vi.advanceTimersByTime(2_000);
     expect(ui().animationStuck).toBe(true);
+  });
+
+  it('꿈 인트로: 첫 도전에서만, 재생 중 말씀 선택 무시, 첫 시작을 undo하면 인트로 취소 후 다음 시작에 다시 재생', async () => {
+    boot();
+    actions().registerTeams([{ name: '믿음팀' }, { name: '소망팀' }]);
+    actions().start();
+    actions().startChallenge('team-1');
+    expect(ui().introPlaying).toBe(true);
+    expect(lastPlay().kind).toBe('intro');
+    expect(state().progress!.phase).toBe('choosingTrack');
+    actions().selectTrack('set-1'); // 인트로 중에는 무시
+    expect(state().progress!.phase).toBe('choosingTrack');
+
+    actions().undo(); // 도전 시작 취소 → 인트로도 취소
+    expect(ui().introPlaying).toBe(false);
+    expect(fake.player.cancel).toHaveBeenCalled();
+    expect(state().progress).toBeNull();
+
+    // 첫 도전 시작을 취소했으므로 다시 시작하면 인트로를 다시 보여준다
+    actions().startChallenge('team-1');
+    expect(ui().introPlaying).toBe(true);
+    expect(lastPlay().kind).toBe('intro');
+    fake.current!.resolve('ended');
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(ui().introPlaying).toBe(false);
+
+    // 말씀 선택만 되돌리면(도전은 유지) 인트로는 다시 나오지 않는다
+    actions().selectTrack('set-1');
+    actions().undo();
+    expect(state().progress!.phase).toBe('choosingTrack');
+    expect(ui().introPlaying).toBe(false);
+    actions().selectTrack('set-1');
+    expect(state().progress!.phase).toBe('awaitingAnswer');
+    expect(state().teams[0].questionSetId).toBe('set-1');
+  });
+
+  it('두 번째 팀은 인트로 없이 기차역, 고른 길은 다시 고를 수 없다', async () => {
+    await bootAndStart();
+    for (let i = 0; i < 3; i++) {
+      actions().selectChoice(wrongId());
+      await finish();
+    }
+    await finish(); // inferno
+    actions().startChallenge('team-2');
+    expect(fake.plays.map((p) => p.kind)).not.toContain('intro');
+    actions().selectTrack('set-1');
+    expect(state().progress!.phase).toBe('choosingTrack');
+    actions().selectTrack('set-2');
+    expect(state().progress!.phase).toBe('awaitingAnswer');
+  });
+
+  it('엔딩은 클릭을 기다리므로 12초가 지나도 animationStuck=false', async () => {
+    vi.useFakeTimers();
+    await bootAndStart();
+    for (let i = 0; i < 3; i++) {
+      actions().selectChoice(wrongId());
+      fake.current!.resolve('ended');
+      for (let j = 0; j < 5; j++) await Promise.resolve();
+    }
+    expect(lastPlay().kind).toBe('inferno');
+    vi.advanceTimersByTime(30_000);
+    expect(ui().animationStuck).toBe(false);
   });
 });

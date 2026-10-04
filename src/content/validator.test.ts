@@ -86,16 +86,16 @@ describe('parseContentFile', () => {
 describe('validateTeamDrafts', () => {
   it('정상 등록은 오류 없음', () => {
     expect(validateTeamDrafts([
-      { name: '믿음팀', questionSetId: 'set-1' },
-      { name: '소망팀', questionSetId: 'set-2' },
+      { name: '믿음팀' },
+      { name: '소망팀' },
     ], content)).toEqual([]);
   });
 
   it('공백 이름, 앞뒤 공백을 무시한 중복 이름', () => {
     const issues = validateTeamDrafts([
-      { name: '믿음팀', questionSetId: 'set-1' },
-      { name: '   ', questionSetId: 'set-2' },
-      { name: ' 믿음팀 ', questionSetId: 'set-3' },
+      { name: '믿음팀' },
+      { name: '   ' },
+      { name: ' 믿음팀 ' },
     ], content);
     expect(issues).toEqual([
       { location: '팀 2번', message: expect.stringContaining('비어') },
@@ -103,14 +103,10 @@ describe('validateTeamDrafts', () => {
     ]);
   });
 
-  it('세트 연결 누락·존재하지 않는 세트', () => {
-    const issues = validateTeamDrafts([
-      { name: 'A', questionSetId: '' },
-      { name: 'B', questionSetId: 'set-99' },
-    ], content);
-    expect(issues).toEqual([
-      { location: '팀 1번(A)', message: expect.stringContaining('연결') },
-      { location: '팀 2번(B)', message: expect.stringContaining('set-99') },
+  it('팀이 말씀 세트보다 많으면 오류', () => {
+    const drafts = Array.from({ length: content.questionSets.length + 1 }, (_, i) => ({ name: `팀${i + 1}` }));
+    expect(validateTeamDrafts(drafts, content)).toEqual([
+      { location: '팀 등록', message: expect.stringContaining('많습니다') },
     ]);
   });
 

@@ -3,7 +3,7 @@ import sample from '../../data/sample-content.json';
 import type { ContentFile, GameState } from '../types';
 import {
   completeAnimation, createInitialState, getCurrentQuestion, registerTeams, resetRecords,
-  resumeRun, selectChoice, startChallenge, undo,
+  resumeRun, selectChoice, selectTrack, startChallenge, undo,
 } from '../core/engine';
 import { createGameStorage, StorageError } from './storage';
 
@@ -21,8 +21,8 @@ function memoryStorage(): Storage {
 
 function gameState(): GameState {
   return registerTeams(createInitialState(sample as ContentFile), [
-    { name: '믿음팀', questionSetId: 'set-1' },
-    { name: '소망팀', questionSetId: 'set-2' },
+    { name: '믿음팀' },
+    { name: '소망팀' },
   ]);
 }
 
@@ -30,7 +30,7 @@ describe('GameStorage', () => {
   it('저장 전에는 empty, 저장 후 같은 상태를 읽는다', () => {
     const storage = createGameStorage(memoryStorage());
     expect(storage.load()).toEqual({ kind: 'empty' });
-    const s = startChallenge(gameState(), 'team-1');
+    const s = selectTrack(startChallenge(gameState(), 'team-1'), 'set-1');
     storage.save(s);
     expect(storage.load()).toEqual({ kind: 'ok', state: s });
   });
@@ -108,7 +108,7 @@ describe('저장과 엔진 연동 (기획서 8장)', () => {
 
   it('연출 중 새로고침 → 로드 후 resumeRun 해도 점수·목숨·기록 중복 없음', () => {
     const storage = createGameStorage(memoryStorage());
-    let s = startChallenge(gameState(), 'team-1');
+    let s = selectTrack(startChallenge(gameState(), 'team-1'), 'set-1');
     for (let i = 0; i < 4; i++) {
       s = selectChoice(s, correct(s));
       s = completeAnimation(s, s.progress!.runId);
@@ -133,23 +133,23 @@ describe('저장과 엔진 연동 (기획서 8장)', () => {
     expect(r.results[0]).toMatchObject({ teamId: 'team-1', passedCount: 5, outcome: 'clear' });
   });
 
-  it('Undo 복원 상태도 저장 후 유지, 전체 초기화는 팀·문제 연결 유지', () => {
+  it('Undo 복원 상태도 저장 후 유지, 전체 초기화는 팀명 유지·고른 말씀 해제', () => {
     const storage = createGameStorage(memoryStorage());
-    let s = startChallenge(gameState(), 'team-1');
+    let s = selectTrack(startChallenge(gameState(), 'team-1'), 'set-1');
     s = selectChoice(s, wrong(s));
     s = undo(s);
     storage.save(s);
     const loaded = storage.load();
     if (loaded.kind !== 'ok') throw new Error('load failed');
     expect(loaded.state.progress).toMatchObject({ lives: 3, phase: 'awaitingAnswer' });
-    expect(loaded.state.undoHistory).toHaveLength(1);
+    expect(loaded.state.undoHistory).toHaveLength(2); // 도전 시작, 말씀 선택
 
     const reset = resetRecords(loaded.state);
     storage.save(reset);
     const after = storage.load();
     if (after.kind !== 'ok') throw new Error('load failed');
     expect(after.state.teams.map((t) => [t.name, t.questionSetId, t.status])).toEqual([
-      ['믿음팀', 'set-1', 'notStarted'], ['소망팀', 'set-2', 'notStarted'],
+      ['믿음팀', null, 'notStarted'], ['소망팀', null, 'notStarted'],
     ]);
     expect(after.state.progress).toBeNull();
     expect(after.state.results).toEqual([]);

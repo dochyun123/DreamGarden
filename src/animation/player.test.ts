@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnimationEndReason } from '../types';
 import { createAnimationPlayer, LOAD_TIMEOUT_MS, VIDEO_GRACE_MS, type AnimationPlayer } from './player';
-import { DURATION } from './scenes';
+import { CHAR_MS } from './dialogue';
+import { DIALOGUE, DURATION } from './scenes';
 
 const ctx = { teamName: '믿음팀', livesBefore: 3, livesAfter: 2 };
 
@@ -20,6 +21,19 @@ function track(p: Promise<AnimationEndReason>) {
 
 const video = () => host.querySelector('video');
 const overlay = () => host.querySelector('.ap-overlay');
+const dialogue = () => host.querySelector('[data-part="dialogue"]');
+const click = () => overlay()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+const key = (k: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+const longest = (lines: readonly string[]) => Math.max(...lines.map((l) => Array.from(l).length));
+
+/** 대사 상자가 나올 때까지 진행 → 줄마다 다 나오길 기다렸다가 클릭 */
+async function clickThrough(lines: readonly string[]) {
+  for (let i = 0; i < lines.length; i++) {
+    await vi.advanceTimersByTimeAsync(longest(lines) * CHAR_MS + 10);
+    click();
+  }
+  await vi.advanceTimersByTimeAsync(0);
+}
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -53,6 +67,10 @@ describe('연출 길이 기준', () => {
       expect(d).toBeGreaterThanOrEqual(4000);
       expect(d).toBeLessThanOrEqual(6000);
     }
+    // 인트로: 장면 + 대사 타자기 ≈ 6~9초
+    const intro = DURATION.intro + longest(DIALOGUE.intro) * CHAR_MS;
+    expect(intro).toBeGreaterThanOrEqual(4000);
+    expect(intro).toBeLessThanOrEqual(9000);
   });
 });
 
@@ -87,6 +105,7 @@ describe('영상 우선 → 대체 연출', () => {
     expect(video()).toBeNull();
     expect(host.querySelector('[data-scene="heaven"]')).not.toBeNull();
     await vi.advanceTimersByTimeAsync(DURATION.heaven);
+    await clickThrough(DIALOGUE.heaven);
     expect(t.result).toBe('ended');
   });
 
@@ -96,6 +115,7 @@ describe('영상 우선 → 대체 연출', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(video()).toBeNull();
     await vi.advanceTimersByTimeAsync(DURATION.inferno);
+    await clickThrough(DIALOGUE.inferno);
     expect(t.result).toBe('ended');
   });
 
@@ -140,6 +160,7 @@ describe('영상 우선 → 대체 연출', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(video()).toBeNull();
     await vi.advanceTimersByTimeAsync(DURATION.inferno);
+    await clickThrough(DIALOGUE.inferno);
     expect(t.result).toBe('error');
   });
 });
@@ -263,33 +284,31 @@ describe('오답 대체 연출', () => {
   it('자막 → 하트 소멸, 정답 보기는 공개하지 않는다', async () => {
     const t = track(player.play('wrong', ctx));
     video()!.dispatchEvent(new Event('error'));
-    expect(host.textContent).toContain('땡!');
+    expect(host.textContent).toContain('오답');
     expect(host.querySelector('[data-part="hearts"]')).toBeNull();
     await vi.advanceTimersByTimeAsync(DURATION.wrongCaption);
     expect(host.querySelector('[data-part="caption"]')).toBeNull();
     expect(host.querySelectorAll('.ap-heart').length).toBe(3);
     expect(host.querySelectorAll('.ap-heart.ap-lost').length).toBe(1);
-    expect(host.textContent).toContain('목숨 3개');
     await vi.advanceTimersByTimeAsync(200);
-    expect(host.querySelector('.ap-heart.ap-break')).not.toBeNull();
-    expect(host.textContent).toContain('목숨 2개');
+    expect(host.querySelectorAll('.ap-heart.ap-break .ap-half').length).toBe(2);
     expect(host.textContent).not.toMatch(/정답/);
     await vi.advanceTimersByTimeAsync(DURATION.heart - 200);
     expect(t.result).toBe('ended');
   });
 
-  it('마지막 목숨이면 0개 표시', async () => {
+  it('마지막 목숨이면 잃은 하트 1개, 나머지는 빈 하트', async () => {
     track(player.play('wrong', { teamName: 'A', livesBefore: 1, livesAfter: 0 }));
     video()!.dispatchEvent(new Event('error'));
     await vi.advanceTimersByTimeAsync(DURATION.wrongCaption + 200);
-    expect(host.textContent).toContain('목숨 0개');
+    expect(host.querySelectorAll('.ap-heart').length).toBe(3);
+    expect(host.querySelectorAll('.ap-heart.ap-break').length).toBe(1);
   });
 
-  it('팀명은 textContent로만 들어간다', async () => {
-    track(player.play('inferno', { teamName: '<img src=x onerror=alert(1)>', livesBefore: 1, livesAfter: 0 }));
+  it('정답·오답은 클릭을 기다리지 않고 오버레이가 클릭을 막지 않는다', () => {
+    track(player.play('correct', ctx));
     video()!.dispatchEvent(new Event('error'));
-    expect(host.querySelector('img')).toBeNull();
-    expect(host.textContent).toContain('<img src=x');
+    expect(overlay()!.classList.contains('ap-modal')).toBe(false);
   });
 });
 
@@ -319,48 +338,58 @@ describe('저사양 모드', () => {
     track(player.play('inferno', { teamName: 'A', livesBefore: 1, livesAfter: 0 }));
     expect(overlay()!.classList.contains('ap-lite')).toBe(true);
     video()!.dispatchEvent(new Event('error'));
-    await vi.advanceTimersByTimeAsync(2100);
-    expect(host.querySelectorAll('.ap-flame').length).toBe(8);
-    expect(host.querySelectorAll('.ap-ember').length).toBe(12);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(host.querySelectorAll('.ap-flame').length).toBe(6);
+    expect(host.querySelectorAll('.ap-ember').length).toBe(8);
   });
 
   it('기본은 일반 모드', async () => {
     track(player.play('inferno', { teamName: 'A', livesBefore: 1, livesAfter: 0 }));
     expect(overlay()!.classList.contains('ap-lite')).toBe(false);
     video()!.dispatchEvent(new Event('error'));
-    await vi.advanceTimersByTimeAsync(2100);
-    expect(host.querySelectorAll('.ap-flame').length).toBe(14);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(host.querySelectorAll('.ap-flame').length).toBe(10);
   });
 });
 
-describe('가을 테마', () => {
-  afterEach(() => history.replaceState(null, '', '/'));
+describe('픽셀아트', () => {
+  it('그림은 crispEdges SVG로 그린다', () => {
+    for (const kind of ['intro', 'correct', 'heaven', 'inferno'] as const) {
+      track(player.play(kind, ctx));
+      video()?.dispatchEvent(new Event('error'));
+      const svgs = host.querySelectorAll('svg');
+      expect(svgs.length).toBeGreaterThan(0);
+      for (const svg of svgs) expect(svg.getAttribute('shape-rendering')).toBe('crispEdges');
+      player.cancel();
+    }
+  });
 
-  it('정답은 단풍잎·은행잎 낙엽 폭죽, lite면 수가 줄어든다', () => {
+  it('정답은 별이 터진다, lite면 수가 줄어든다', () => {
     track(player.play('correct', ctx));
     video()!.dispatchEvent(new Event('error'));
-    const normal = host.querySelectorAll('.ap-leaf').length;
-    expect(host.querySelectorAll('.ap-leaf.maple').length).toBeGreaterThan(0);
-    expect(host.querySelectorAll('.ap-leaf.ginkgo').length).toBeGreaterThan(0);
+    const normal = host.querySelectorAll('.ap-burst').length;
+    expect(normal).toBeGreaterThan(0);
     player.cancel();
     history.replaceState(null, '', '/?lite=1');
     player = createAnimationPlayer(host, './media/');
     track(player.play('correct', ctx));
-    expect(host.querySelectorAll('.ap-leaf').length).toBeLessThan(normal);
+    expect(host.querySelectorAll('.ap-burst').length).toBeLessThan(normal);
+    history.replaceState(null, '', '/');
   });
 
-  it('잃은 하트는 네 조각으로 바스러진다', async () => {
-    track(player.play('wrong', ctx));
-    video()!.dispatchEvent(new Event('error'));
-    await vi.advanceTimersByTimeAsync(DURATION.wrongCaption + 200);
-    expect(host.querySelectorAll('.ap-heart.ap-break .frag').length).toBe(4);
-  });
-
-  it('천국 문이 열리면 황금 낙엽이 흩날린다', async () => {
+  it('천국 문이 열린다', async () => {
     track(player.play('heaven', ctx));
     video()!.dispatchEvent(new Event('error'));
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(host.querySelectorAll('.ap-drift').length).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(1700);
+    expect(host.querySelector('.ap-gate.open')).not.toBeNull();
+  });
+
+  it('불구덩이 끝에는 방 천장에서 눈을 번쩍 뜬다', async () => {
+    track(player.play('inferno', ctx));
+    video()!.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(DURATION.inferno);
+    expect(host.querySelector('.ap-room')).not.toBeNull();
+    expect(host.querySelector('.ap-fire')).toBeNull();
   });
 });
 
@@ -370,7 +399,7 @@ describe('천국 말씀 구절', () => {
   it('scriptureReference가 있으면 천국 자막 아래에 표시', async () => {
     track(player.play('heaven', { ...heavenCtx, scriptureReference: '요한복음 3:16' }));
     video()!.dispatchEvent(new Event('error'));
-    await vi.advanceTimersByTimeAsync(2599);
+    await vi.advanceTimersByTimeAsync(2399);
     expect(host.querySelector('[data-part="verse"]')).toBeNull();
     await vi.advanceTimersByTimeAsync(1);
     const verse = host.querySelector('[data-part="verse"]')!;
@@ -382,10 +411,10 @@ describe('천국 말씀 구절', () => {
     for (const ref of [undefined, '', '   ']) {
       const t = track(player.play('heaven', { ...heavenCtx, scriptureReference: ref }));
       video()?.dispatchEvent(new Event('error'));
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(DURATION.heaven);
       expect(host.textContent).toContain('천국 입성!');
       expect(host.querySelector('[data-part="verse"]')).toBeNull();
-      await vi.advanceTimersByTimeAsync(2000);
+      await clickThrough(DIALOGUE.heaven);
       expect(t.result).toBe('ended');
     }
   });
@@ -401,8 +430,142 @@ describe('천국 말씀 구절', () => {
     }
     track(player.play('heaven', withRef));
     video()?.dispatchEvent(new Event('error'));
-    await vi.advanceTimersByTimeAsync(2600);
+    await vi.advanceTimersByTimeAsync(2400);
     expect(host.querySelector('b')).toBeNull();
     expect(host.querySelector('[data-part="verse"]')!.textContent).toBe('<b>요한복음 3:16</b>');
+  });
+});
+
+describe('인트로', () => {
+  const introCtx = { teamName: '', livesBefore: 3, livesAfter: 3 };
+
+  it('영상 주소는 intro.mp4', () => {
+    track(player.play('intro', introCtx));
+    expect(video()?.getAttribute('src')).toBe('./media/intro.mp4');
+  });
+
+  it('눈을 뜨면 지하 기차역 → 대사 → 클릭하면 ended', async () => {
+    const t = track(player.play('intro', introCtx));
+    video()!.dispatchEvent(new Event('error'));
+    expect(host.querySelector('[data-scene="intro"] .ap-station')).not.toBeNull();
+    expect(host.querySelectorAll('.ap-lid').length).toBe(2);
+    expect(overlay()!.classList.contains('ap-modal')).toBe(true);
+    await vi.advanceTimersByTimeAsync(DURATION.intro - 1);
+    expect(dialogue()).toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(dialogue()).not.toBeNull();
+    await clickThrough(DIALOGUE.intro);
+    expect(t.result).toBe('ended');
+    expect(overlay()).toBeNull();
+  });
+
+  it('영상이 끝나면 대사 없이 ended', async () => {
+    const t = track(player.play('intro', introCtx));
+    video()!.dispatchEvent(new Event('playing'));
+    video()!.dispatchEvent(new Event('ended'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.result).toBe('ended');
+  });
+});
+
+describe('끝 장면 클릭 대기', () => {
+  const lines = DIALOGUE.heaven;
+
+  async function toDialogue() {
+    const t = track(player.play('heaven', ctx));
+    video()!.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(DURATION.heaven);
+    return t;
+  }
+
+  it('클릭 전에는 끝나지 않는다', async () => {
+    const t = await toDialogue();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(t.result).toBeUndefined();
+    expect(player.isPlaying()).toBe(true);
+    expect(host.querySelector('.ap-dlg-text')!.textContent).toBe(lines[0]);
+    expect(host.querySelector('[data-part="next"]')!.classList.contains('on')).toBe(true);
+  });
+
+  it('타자기 중 클릭은 그 줄을 바로 다 보여주고, 다음 클릭은 다음 줄', async () => {
+    const t = await toDialogue();
+    await vi.advanceTimersByTimeAsync(CHAR_MS * 2);
+    const text = host.querySelector('.ap-dlg-text')!;
+    expect(text.textContent!.length).toBeLessThan(lines[0].length);
+    expect(host.querySelector('[data-part="next"]')!.classList.contains('on')).toBe(false);
+    click();
+    expect(text.textContent).toBe(lines[0]);
+    expect(host.querySelector('[data-part="next"]')!.classList.contains('on')).toBe(true);
+    await vi.advanceTimersByTimeAsync(CHAR_MS * 5); // 남은 글자 타이머가 덮어쓰지 않는다
+    expect(text.textContent).toBe(lines[0]);
+    click();
+    expect(text.textContent).toBe('');
+    click(); // 2번째 줄 빨리 넘기기
+    expect(text.textContent).toBe(lines[1]);
+    expect(t.result).toBeUndefined();
+    click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.result).toBe('ended');
+  });
+
+  it('Enter/Space로도 넘긴다', async () => {
+    const t = await toDialogue();
+    for (const k of [' ', 'Enter', 'Enter', 'Enter']) key(k);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.result).toBe('ended');
+  });
+
+  it('대사가 나오기 전 클릭과 다른 키는 무시', async () => {
+    const t = track(player.play('inferno', ctx));
+    video()!.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(1000);
+    for (let i = 0; i < 5; i++) click();
+    key('a');
+    await vi.advanceTimersByTimeAsync(DURATION.inferno - 1000);
+    expect(dialogue()).not.toBeNull();
+    expect(host.querySelector('.ap-dlg-text')!.textContent).toBe('');
+    await clickThrough(DIALOGUE.inferno);
+    expect(t.result).toBe('ended');
+  });
+
+  it('일시정지 중에는 클릭을 무시하고 타자기도 멈춘다', async () => {
+    const t = await toDialogue();
+    player.pause();
+    for (let i = 0; i < 6; i++) click();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(host.querySelector('.ap-dlg-text')!.textContent).toBe('');
+    expect(t.result).toBeUndefined();
+    player.resume();
+    await clickThrough(lines);
+    expect(t.result).toBe('ended');
+  });
+
+  it('skip은 대사 중에도 즉시 skipped, 이후 입력은 무시', async () => {
+    const t = await toDialogue();
+    player.skip();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.result).toBe('skipped');
+    expect(overlay()).toBeNull();
+    key('Enter');
+    expect(t.calls).toBe(1);
+  });
+
+  it('cancel은 대사 중에도 cancelled, 키 리스너를 떼어낸다', async () => {
+    const t = await toDialogue();
+    player.cancel();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.result).toBe('cancelled');
+    const e = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+    window.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  it('불구덩이도 대사 뒤 클릭으로 끝난다', async () => {
+    const t = track(player.play('inferno', ctx));
+    video()!.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(DURATION.inferno);
+    expect(host.querySelector('.ap-dlg-text')).not.toBeNull();
+    await clickThrough(DIALOGUE.inferno);
+    expect(t.result).toBe('ended');
   });
 });

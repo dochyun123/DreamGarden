@@ -10,7 +10,6 @@ import type {
 
 export interface TeamDraft {
   name: string;
-  questionSetId: string;
 }
 
 /** 빈 게임 상태. 팀 없음. */
@@ -26,7 +25,7 @@ export function createInitialState(content: ContentFile): GameState {
   };
 }
 
-/** 문제 데이터 교체. progress가 있거나 results가 있으면 거부(그대로 반환). 팀의 questionSetId는 유지. */
+/** 문제 데이터 교체. progress가 있거나 results가 있으면 거부(그대로 반환). 팀이 고른 말씀(questionSetId)은 기록이 없으므로 모두 비어 있다. */
 export function replaceContent(state: GameState, content: ContentFile): GameState {
   if (state.progress || state.results.length > 0) return state;
   return {
@@ -43,33 +42,56 @@ export function registerTeams(state: GameState, drafts: TeamDraft[]): GameState 
   const teams: Team[] = drafts.map((d, i) => ({
     id: `team-${i + 1}`,
     name: d.name.trim(),
-    questionSetId: d.questionSetId,
+    questionSetId: null,
     status: 'notStarted',
   }));
   return { ...state, teams, undoHistory: [] };
 }
 
-/** 미도전 팀 도전 시작. 다른 팀이 진행 중이면 거부. 시작 전 스냅샷을 undo에 쌓는다. lives=3, passed=0, phase=awaitingAnswer, runId+1 */
+/** 미도전 팀 도전 시작. 다른 팀이 진행 중이면 거부. 시작 전 스냅샷을 undo에 쌓는다. lives=3, passed=0, phase=choosingTrack(기차역), runId+1 */
 export function startChallenge(state: GameState, teamId: string): GameState {
   if (state.progress) return state;
   const team = state.teams.find((t) => t.id === teamId);
   if (!team || team.status !== 'notStarted') return state;
-  const set = state.questionSets.find((s) => s.id === team.questionSetId);
-  if (!set || set.questions.length !== QUESTIONS_PER_SET) return state;
+  if (availableSetIds(state).length === 0) return state;
 
   return {
     ...pushUndo(state, `${team.name} 도전 시작`),
-    teams: state.teams.map((t) => (t.id === teamId ? { ...t, status: 'inProgress' } : t)),
+    teams: state.teams.map((t) => (t.id === teamId ? { ...t, status: 'inProgress', questionSetId: null } : t)),
     progress: {
       activeTeamId: teamId,
       questionIndex: 0,
       lives: STARTING_LIVES,
       passedCount: 0,
-      phase: 'awaitingAnswer',
+      phase: 'choosingTrack',
       selectedChoiceId: null,
       runId: maxKnownRunId(state) + 1,
     },
   };
+}
+
+/** 기차역에서 말씀(세트) 선택. phase가 choosingTrack이고 다른 팀이 고르지 않은 세트일 때만. 선택 전 스냅샷 push → phase=awaitingAnswer, runId+1 */
+export function selectTrack(state: GameState, questionSetId: string): GameState {
+  const progress = state.progress;
+  if (!progress || progress.phase !== 'choosingTrack') return state;
+  if (!availableSetIds(state).includes(questionSetId)) return state;
+  const team = state.teams.find((t) => t.id === progress.activeTeamId);
+  const set = state.questionSets.find((s) => s.id === questionSetId);
+  if (!team || !set) return state;
+
+  return {
+    ...pushUndo(state, `${team.name} ${set.scriptureReference} 선택`),
+    teams: state.teams.map((t) => (t.id === team.id ? { ...t, questionSetId } : t)),
+    progress: { ...progress, phase: 'awaitingAnswer', runId: progress.runId + 1 },
+  };
+}
+
+/** 아직 어떤 팀도 고르지 않았고 문제가 5개인 세트 id (기차역에서 열린 길) */
+export function availableSetIds(state: GameState): string[] {
+  const taken = new Set(state.teams.map((t) => t.questionSetId).filter((id): id is string => id !== null));
+  return state.questionSets
+    .filter((s) => !taken.has(s.id) && s.questions.length === QUESTIONS_PER_SET)
+    .map((s) => s.id);
 }
 
 /**
@@ -145,6 +167,7 @@ export function completeAnimation(state: GameState, runId: number): GameState {
   });
 
   switch (progress.phase) {
+    case 'choosingTrack':
     case 'awaitingAnswer':
       return state;
     case 'correct':
@@ -185,11 +208,11 @@ export function lastUndoLabel(state: GameState): string | null {
   return state.undoHistory[state.undoHistory.length - 1]?.label ?? null;
 }
 
-/** 전체 기록 초기화: progress·results·undo 제거, 모든 팀 notStarted. 팀명·문제 연결 유지. */
+/** 전체 기록 초기화: progress·results·undo 제거, 모든 팀 notStarted, 고른 말씀 해제. 팀명은 유지. */
 export function resetRecords(state: GameState): GameState {
   return {
     ...state,
-    teams: state.teams.map((t) => ({ ...t, status: 'notStarted' })),
+    teams: state.teams.map((t) => ({ ...t, status: 'notStarted', questionSetId: null })),
     progress: null,
     results: [],
     undoHistory: [],
@@ -201,13 +224,13 @@ export function getCurrentQuestion(state: GameState): Question | null {
   const progress = state.progress;
   if (!progress) return null;
   const team = state.teams.find((t) => t.id === progress.activeTeamId);
-  const set = team && state.questionSets.find((s) => s.id === team.questionSetId);
+  const set = team?.questionSetId ? state.questionSets.find((s) => s.id === team.questionSetId) : undefined;
   return set?.questions[progress.questionIndex] ?? null;
 }
 
-/** phase에 해당하는 연출. awaitingAnswer면 null. */
+/** phase에 해당하는 연출. awaitingAnswer·choosingTrack이면 null. */
 export function animationForPhase(phase: Phase): AnimationKind | null {
-  return phase === 'awaitingAnswer' ? null : phase;
+  return phase === 'awaitingAnswer' || phase === 'choosingTrack' ? null : phase;
 }
 
 // ───────── 내부 도우미 ─────────

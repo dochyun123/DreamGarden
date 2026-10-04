@@ -1,6 +1,8 @@
 // 공용 타입 — 모든 모듈의 계약. 변경은 리드(dream-3c)와 합의 후에만.
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+/** 기차역 갈림길 = 문제 세트 수 (말씀 10개) */
+export const TRACK_COUNT = 10;
 export const QUESTIONS_PER_SET = 5;
 export const CHOICES_PER_QUESTION = 5;
 export const STARTING_LIVES = 3;
@@ -41,18 +43,20 @@ export type Outcome = 'clear' | 'failed';
 export interface Team {
   id: string;
   name: string;
-  questionSetId: string;
+  /** 기차역에서 고른 말씀(세트). 고르기 전에는 null. 다른 팀이 고른 세트는 선택 불가 */
+  questionSetId: string | null;
   status: TeamStatus;
 }
 
 /**
  * 진행 단계.
+ * - choosingTrack: 기차역 갈림길에서 말씀 선택 (도전 시작 직후. 연출 없음)
  * - awaitingAnswer: 문제 대기 (보기 입력 가능한 유일한 단계)
  * - correct: 정답 연출 (끝나면 passedCount<5 → 다음 문제, =5 → heaven)
  * - wrong: 오답 자막 + 하트 소멸 연출 (끝나면 lives>0 → 같은 문제, =0 → inferno)
  * - heaven / inferno: 종료 연출 (끝나면 progress=null, 팀 선택 복귀)
  */
-export type Phase = 'awaitingAnswer' | 'correct' | 'wrong' | 'heaven' | 'inferno';
+export type Phase = 'choosingTrack' | 'awaitingAnswer' | 'correct' | 'wrong' | 'heaven' | 'inferno';
 
 export interface Progress {
   activeTeamId: string;
@@ -120,6 +124,7 @@ export interface ValidationIssue {
 
 // ───────── 연출 ─────────
 
-export type AnimationKind = 'correct' | 'wrong' | 'heaven' | 'inferno';
+/** intro: 꿈 인트로 (행사 첫 시작 때만, 엔진 phase와 무관하게 app이 재생) */
+export type AnimationKind = 'intro' | 'correct' | 'wrong' | 'heaven' | 'inferno';
 
 export type AnimationEndReason = 'ended' | 'skipped' | 'error' | 'cancelled';

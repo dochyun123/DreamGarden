@@ -1,5 +1,7 @@
-// 담당: dream-f4 — 초기 설정: 문제 JSON/CSV 가져오기 → 팀 수(기본 8) → 팀명 → 세트 연결 → 등록
-import type { GameState, QuestionSet } from '../../types';
+// 담당: dream-f4 — 초기 설정: 문제 JSON/CSV 가져오기 → 팀 수(기본 8) → 팀명 → 등록
+// 말씀(세트)은 팀이 기차역 갈림길에서 직접 고르므로 여기서 연결하지 않는다.
+import type { GameState } from '../../types';
+import { TRACK_COUNT } from '../../types';
 import type { UiState } from '../ui';
 import type { Ctx, Screen, SetupRowDraft } from '../context';
 import { MAX_TEAMS } from '../context';
@@ -13,21 +15,16 @@ function initialDraft(state: GameState): NonNullable<Ctx['local']['setup']> {
   if (state.teams.length > 0) {
     return {
       count: state.teams.length,
-      rows: state.teams.map((t) => ({ name: t.name, questionSetId: t.questionSetId })),
+      rows: state.teams.map((t) => ({ name: t.name })),
       parseError: null,
     };
   }
   return { count: DEFAULT_TEAM_COUNT, rows: [], parseError: null };
 }
 
-/** 빈 행 채우기 + 세트 기본 연결(i번째 팀 → i번째 세트), 없어진 세트 id는 비움 */
-function normalizeRows(rows: SetupRowDraft[], count: number, sets: QuestionSet[]): void {
-  while (rows.length < count) rows.push({ name: '', questionSetId: '' });
-  const ids = new Set(sets.map((s) => s.id));
-  rows.forEach((r, i) => {
-    if (r.questionSetId && !ids.has(r.questionSetId)) r.questionSetId = '';
-    if (!r.questionSetId && sets[i]) r.questionSetId = sets[i].id;
-  });
+/** 빈 행 채우기 */
+function normalizeRows(rows: SetupRowDraft[], count: number): void {
+  while (rows.length < count) rows.push({ name: '' });
 }
 
 /** UTF-8 우선, 실패하면 CP949(엑셀 기본 'CSV' 저장)로 다시 읽는다 */
@@ -100,7 +97,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
           h('div', { class: 'setup__actions' }, submit),
         ),
         h('div', { class: 'setup__main' },
-          h('div', { class: 'page__head' }, h('h3', { class: 'panel__title' }, '3. 팀 이름과 문제 세트')),
+          h('div', { class: 'page__head' }, h('h3', { class: 'panel__title' }, '3. 팀 이름')),
           rows,
         ),
       ),
@@ -147,11 +144,11 @@ export function createSetupScreen(ctx: Ctx): Screen {
   function register(): void {
     const dr = draft();
     ctx.actions.registerTeams(
-      dr.rows.slice(0, dr.count).map((r) => ({ name: r.name.trim(), questionSetId: r.questionSetId })),
+      dr.rows.slice(0, dr.count).map((r) => ({ name: r.name.trim() })),
     );
   }
 
-  function buildRows(sets: QuestionSet[], locked: boolean): void {
+  function buildRows(locked: boolean): void {
     const dr = draft();
     rows.replaceChildren(
       ...dr.rows.slice(0, dr.count).map((r, i) => {
@@ -160,16 +157,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
           attrs: { type: 'text', value: r.name, placeholder: `팀 ${i + 1} 이름`, maxlength: 20, disabled: locked, 'aria-label': `팀 ${i + 1} 이름` },
           on: { input: () => { r.name = nameInput.value; } },
         });
-        const select = h('select', {
-          class: 'field',
-          attrs: { disabled: locked, 'aria-label': `팀 ${i + 1} 문제 세트` },
-          on: { change: () => { r.questionSetId = select.value; } },
-        },
-          h('option', { attrs: { value: '' } }, '— 문제 세트 선택 —'),
-          sets.map((s) => h('option', { attrs: { value: s.id, selected: s.id === r.questionSetId } }, `${s.scriptureReference} (${s.id})`)),
-        );
-        select.value = r.questionSetId;
-        return h('div', { class: 'team-row' }, h('div', { class: 'team-row__num' }, i + 1), nameInput, select);
+        return h('div', { class: 'team-row' }, h('div', { class: 'team-row__num' }, i + 1), nameInput);
       }),
     );
   }
@@ -183,9 +171,12 @@ export function createSetupScreen(ctx: Ctx): Screen {
       const sets = s.questionSets;
       const lock = editLockReason(s);
       const locked = !!lock;
-      normalizeRows(dr.rows, dr.count, sets);
+      normalizeRows(dr.rows, dr.count);
 
-      contentInfo.replaceChildren(h('b', null, sets.length ? `${sets.length}개 세트 불러옴` : '불러온 문제가 없습니다'));
+      contentInfo.replaceChildren(
+        h('b', null, sets.length ? `말씀 ${sets.length} / ${TRACK_COUNT}개 불러옴` : '불러온 문제가 없습니다'),
+        sets.length > 0 && sets.length !== TRACK_COUNT ? `기차역 갈림길은 ${TRACK_COUNT}개입니다` : '',
+      );
       importBtn.disabled = locked;
       minus.disabled = locked || dr.count <= 1;
       plus.disabled = locked || dr.count >= MAX_TEAMS;
@@ -195,10 +186,10 @@ export function createSetupScreen(ctx: Ctx): Screen {
       submit.disabled = locked || sets.length === 0;
 
       // 입력 중 포커스를 잃지 않도록 행 구성이 바뀔 때만 다시 만든다
-      const key = `${dr.count}|${sets.map((x) => x.id).join(',')}|${locked}`;
+      const key = `${dr.count}|${locked}`;
       if (key !== rowsKey) {
         rowsKey = key;
-        buildRows(sets, locked);
+        buildRows(locked);
       }
 
       const all = [

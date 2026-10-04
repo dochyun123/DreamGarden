@@ -1,97 +1,75 @@
-// Web Audio 효과음 합성 — 외부 파일 없이 영상이 없을 때 대체 연출에 쓴다.
+// 8비트(칩튠) 느낌의 Web Audio 효과음 — 외부 파일 없이 사각파·삼각파 삑삑이로 만든다.
 // 모든 함수는 out(세션별 GainNode)에 연결하므로, 세션 정리 시 out.disconnect()로 즉시 끊긴다.
+// 나중에 실제 음원으로 바꾸기 쉽도록 짧고 단순하게 둔다.
 
-type Wave = OscillatorType;
+type Wave = 'square' | 'triangle';
 
-function tone(
+/** 음 하나: 시작(초)·길이(초)·주파수. freqEnd가 있으면 계단식이 아닌 선형으로 미끄러진다 */
+function note(
   ctx: AudioContext,
   out: AudioNode,
-  o: { type: Wave; freq: number; freqEnd?: number; at: number; dur: number; gain: number; attack?: number },
+  o: { type?: Wave; freq: number; freqEnd?: number; at: number; dur: number; gain?: number },
 ): void {
   const t0 = ctx.currentTime + o.at;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
-  osc.type = o.type;
+  osc.type = o.type ?? 'square';
   osc.frequency.setValueAtTime(o.freq, t0);
-  if (o.freqEnd !== undefined) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.freqEnd), t0 + o.dur);
-  const attack = o.attack ?? 0.01;
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(o.gain, t0 + attack);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
+  if (o.freqEnd !== undefined) osc.frequency.linearRampToValueAtTime(o.freqEnd, t0 + o.dur);
+  const vol = o.gain ?? 0.12;
+  // 칩튠처럼 거의 바로 켜지고 끝에서 짧게 꺼진다
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.setValueAtTime(vol, t0 + Math.max(0, o.dur - 0.02));
+  g.gain.linearRampToValueAtTime(0, t0 + o.dur);
   osc.connect(g).connect(out);
   osc.start(t0);
-  osc.stop(t0 + o.dur + 0.05);
+  osc.stop(t0 + o.dur + 0.02);
 }
 
-let noiseCache: { ctx: AudioContext; buf: AudioBuffer } | null = null;
-
-function noise(
-  ctx: AudioContext,
-  out: AudioNode,
-  o: { at: number; dur: number; gain: number; filter: BiquadFilterType; freq: number },
-): void {
-  if (!noiseCache || noiseCache.ctx !== ctx) {
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    noiseCache = { ctx, buf };
+/** 음 목록을 순서대로 [주파수, 길이(초)] — 0Hz는 쉼표 */
+function melody(ctx: AudioContext, out: AudioNode, seq: [number, number][], type: Wave = 'square', gain?: number, start = 0): void {
+  let at = start;
+  for (const [freq, dur] of seq) {
+    if (freq > 0) note(ctx, out, { type, freq, at, dur: dur * 0.92, gain });
+    at += dur;
   }
-  const t0 = ctx.currentTime + o.at;
-  const src = ctx.createBufferSource();
-  src.buffer = noiseCache.buf;
-  src.loop = true;
-  const f = ctx.createBiquadFilter();
-  f.type = o.filter;
-  f.frequency.value = o.freq;
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(o.gain, t0 + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
-  src.connect(f).connect(g).connect(out);
-  src.start(t0);
-  src.stop(t0 + o.dur + 0.05);
 }
 
-export type SfxName = 'correct' | 'buzzer' | 'heartPop' | 'rumble' | 'whistle' | 'thud' | 'sizzle' | 'heavenPad' | 'sparkle';
+export type SfxName = 'intro' | 'correct' | 'wrong' | 'heartBreak' | 'heaven' | 'fall' | 'inferno' | 'wake' | 'blip';
 
-const C5 = 523.25, E5 = 659.25, G5 = 783.99, C6 = 1046.5;
+// 음 높이 (Hz)
+const C4 = 261.63, E4 = 329.63, G4 = 392.0, A4 = 440.0;
+const C5 = 523.25, D5 = 587.33, E5 = 659.25, G5 = 783.99, A5 = 880.0, C6 = 1046.5;
 
 export function playSfx(ctx: AudioContext, out: AudioNode, name: SfxName): void {
   switch (name) {
-    case 'correct':
-      [C5, E5, G5, C6].forEach((f, i) => tone(ctx, out, { type: 'triangle', freq: f, at: i * 0.09, dur: 0.3, gain: 0.5 }));
-      tone(ctx, out, { type: 'sine', freq: C6 * 1.5, at: 0.4, dur: 0.5, gain: 0.2 });
+    case 'intro': // 꿈 속 차임 — 느린 삼각파 아르페지오
+      melody(ctx, out, [[E5, 0.22], [G5, 0.22], [C6, 0.22], [G5, 0.22], [E5, 0.5]], 'triangle', 0.18);
       break;
-    case 'buzzer':
-      tone(ctx, out, { type: 'square', freq: 220, at: 0, dur: 0.25, gain: 0.25 });
-      tone(ctx, out, { type: 'square', freq: 165, at: 0.28, dur: 0.45, gain: 0.25 });
+    case 'correct': // 짧은 상승 징글
+      melody(ctx, out, [[C5, 0.08], [E5, 0.08], [G5, 0.08], [C6, 0.3]]);
       break;
-    case 'heartPop':
-      tone(ctx, out, { type: 'sine', freq: 900, freqEnd: 180, at: 0, dur: 0.3, gain: 0.45 });
-      noise(ctx, out, { at: 0, dur: 0.12, gain: 0.15, filter: 'highpass', freq: 2000 });
+    case 'wrong': // 낮은 두 번 부저
+      melody(ctx, out, [[150, 0.16], [0, 0.05], [110, 0.3]], 'square', 0.14);
       break;
-    case 'rumble':
-      noise(ctx, out, { at: 0, dur: 0.9, gain: 0.35, filter: 'lowpass', freq: 180 });
+    case 'heartBreak': // 위에서 아래로 뚝 떨어지는 소리
+      note(ctx, out, { freq: 900, freqEnd: 120, at: 0, dur: 0.25, gain: 0.12 });
       break;
-    case 'whistle':
-      tone(ctx, out, { type: 'sine', freq: 1400, freqEnd: 180, at: 0, dur: 1.25, gain: 0.3 });
+    case 'heaven': // 팡파르
+      melody(ctx, out, [[G4, 0.12], [C5, 0.12], [E5, 0.12], [G5, 0.24], [E5, 0.12], [G5, 0.5]], 'square', 0.1);
+      melody(ctx, out, [[C4, 0.48], [E4, 0.36], [C4, 0.5]], 'triangle', 0.18);
       break;
-    case 'thud':
-      tone(ctx, out, { type: 'sine', freq: 130, freqEnd: 40, at: 0, dur: 0.45, gain: 0.8 });
-      noise(ctx, out, { at: 0, dur: 0.35, gain: 0.4, filter: 'lowpass', freq: 500 });
+    case 'fall': // 떨어지는 휘파람
+      note(ctx, out, { freq: 1200, freqEnd: 150, at: 0, dur: 1.1, gain: 0.08 });
       break;
-    case 'sizzle':
-      noise(ctx, out, { at: 0.05, dur: 2.2, gain: 0.12, filter: 'bandpass', freq: 2500 });
+    case 'inferno': // 낮게 우르릉 — 삼각파를 빠르게 오르내린다
+      for (let i = 0; i < 10; i++) note(ctx, out, { type: 'triangle', freq: i % 2 ? 55 : 70, at: i * 0.08, dur: 0.08, gain: 0.3 });
       break;
-    case 'heavenPad':
-      [261.63, 329.63, 392.0, 523.25].forEach((f) =>
-        tone(ctx, out, { type: 'sine', freq: f, at: 0, dur: 4.2, gain: 0.16, attack: 0.9 }),
-      );
+    case 'wake': // 번쩍 깨는 소리
+      melody(ctx, out, [[A4, 0.06], [D5, 0.06], [A5, 0.16]], 'square', 0.1);
       break;
-    case 'sparkle':
-      [1568, 2093, 1760, 2637, 2093].forEach((f, i) =>
-        tone(ctx, out, { type: 'triangle', freq: f, at: i * 0.11, dur: 0.35, gain: 0.15 }),
-      );
+    case 'blip': // 대사 글자 소리
+      note(ctx, out, { freq: 620, at: 0, dur: 0.03, gain: 0.05 });
       break;
   }
 }

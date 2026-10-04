@@ -1,4 +1,4 @@
-// 담당: dream-f4 — 문제 화면. 라운드·통과 수·정답은 표시하지 않는다.
+// 담당: dream-f4 — 문제 화면 (달리는 지하철 객차 안). 라운드·통과 수·정답은 표시하지 않는다.
 import type { GameState, Question } from '../../types';
 import { STARTING_LIVES } from '../../types';
 import { getCurrentQuestion } from '../../core/engine';
@@ -24,15 +24,29 @@ export function renderPrompt(prompt: string): (string | HTMLElement)[] {
   return out;
 }
 
+/** ?lite=1 (또는 true) — 연출(player.ts)과 같은 저사양 판단 */
+function isLite(): boolean {
+  const v = new URLSearchParams(location.search).get('lite');
+  return v === '1' || v === 'true';
+}
+
+/** 운전석에서 내다본 지하 터널 (assets/game-bg.png, 사용자 그림). 빛줄기는 앞 유리창 안에서만 가끔 지나간다 */
+function cabBackground(): HTMLElement {
+  return h('div', { class: 'cab', attrs: { 'aria-hidden': 'true' } },
+    h('div', { class: 'cab__view' }),
+    h('div', { class: 'cab__glass' }, h('span', { class: 'cab__glint' })),
+  );
+}
+
 export function createQuestionScreen(ctx: Ctx): Screen {
   let state: GameState | null = null;
   let ui: UiState | null = null;
   let questionKey = '';
 
-  const teamName = h('h1', { class: 'q-team' });
+  const teamName = h('h1', { class: 'q-team g-plate' });
   const livesLabel = h('div', { class: 'q-lives__label' });
   const hearts = h('div', { class: 'q-lives__hearts' });
-  const lives = h('div', { class: 'q-lives', attrs: { 'aria-live': 'polite' } }, livesLabel, hearts);
+  const lives = h('div', { class: 'q-lives g-plate', attrs: { 'aria-live': 'polite' } }, livesLabel, hearts);
   const prompt = h('p', { class: 'q-prompt' });
   const choices = h('div', { class: 'choices', attrs: { role: 'group', 'aria-label': '보기' } });
   const fab = h(
@@ -47,7 +61,8 @@ export function createQuestionScreen(ctx: Ctx): Screen {
 
   const el = h(
     'section',
-    { class: 'screen question' },
+    { class: `screen question${isLite() ? ' is-lite' : ''}` },
+    cabBackground(),
     h('header', { class: 'q-head' }, teamName, lives),
     h('div', { class: 'q-body' }, h('div', { class: 'q-instruction' }, '빈칸에 들어갈 말을 고르세요'), prompt),
     choices,

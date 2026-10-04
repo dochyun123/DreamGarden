@@ -1,11 +1,13 @@
-// 담당: 9d10c602 — 정답·오답(+하트 소멸)·천국·불구덩이 연출, 완료 신호, 취소, 오류 대체.
+// 담당: 9d10c602 — 꿈 인트로·정답·오답(+하트 소멸)·천국·불구덩이 픽셀아트 연출, 완료 신호, 취소, 오류 대체.
 import type { AnimationEndReason, AnimationKind } from '../types';
 import { PausableClock } from './clock';
+import { startDialogue, type Dialogue } from './dialogue';
 import { buildScene, heartScene, type Scene, type SfxFn } from './scenes';
 import { playSfx } from './sfx';
 import { ensureStyles } from './styles';
 
 export interface PlayContext {
+  /** intro에서는 '' (팀 없음). 현재 대체 연출은 팀명을 화면에 쓰지 않는다 */
   teamName: string;
   livesBefore: number;
   livesAfter: number;
@@ -18,6 +20,12 @@ export interface AnimationPlayer {
    * host 위 전체화면 오버레이로 연출 재생. 끝나면 이유와 함께 resolve (reject 금지).
    * public/media/{kind}.mp4 가 있으면 영상 우선, 없거나 오류/타임아웃이면 CSS 대체 연출+자막.
    * 'wrong'은 오답 자막(1~1.5s) → 하트 소멸(0.5~0.8s)까지 포함. 정답을 공개하지 않는다.
+   * 'intro'(행사 첫 시작, 꿈에서 눈을 뜨면 지하 기차역)·'heaven'·'inferno'의 대체 연출은 장면 뒤에
+   * 대사 상자가 나오고 **클릭을 기다린다** (자동 종료 없음 → app의 '멈춤 감시'에서 제외할 것):
+   *   글자가 나오는 중 클릭 = 그 줄 바로 다 보이기, 줄이 끝나면 ▶ 깜빡임 → 클릭 = 다음 줄,
+   *   마지막 줄에서 클릭 = 'ended'. 클릭은 오버레이 아무 곳, 또는 Enter/Space 키.
+   *   이 동안 오버레이가 아래 화면의 클릭을 막는다. 일시정지 중에는 입력을 무시한다.
+   *   skip()/cancel()은 언제든 즉시 끝낸다. 영상(mp4)으로 재생되면 대사 없이 영상 끝에 'ended'.
    * 이전 재생이 남아 있으면 먼저 cancel.
    */
   play(kind: AnimationKind, ctx: PlayContext): Promise<AnimationEndReason>;
@@ -41,7 +49,10 @@ export interface AnimationPlayer {
  * - 영상이 한 번도 시작하지 못한 kind는 기억해 두고 다음부터 바로 대체 연출 (404 대기 반복 방지).
  * - 'wrong' 영상이 끝나면 하트 소멸(0.7s) CSS 연출을 이어서 보여준다.
  * - pause()는 플레이어 상태다: 일시정지 중에 play()하면 일시정지된 채로 시작하고 resume()에서 진행.
- * - 저사양 모드: 페이지 URL에 ?lite=1 → 불꽃 blur/contrast 필터·블렌딩·무한 회전 제거, 입자 수 축소.
+ * - 저사양 모드: 페이지 URL에 ?lite=1 → 인트로 blur 필터·빛줄기 반복 제거, 입자 수 축소.
+ * - 대체 연출 그림은 픽셀아트(pixel.ts의 crispEdges SVG + steps() 애니메이션), 글꼴은 갈무리11.
+ * - 대사 상자(dialogue.ts)의 타자기 타이머도 세션 clock을 쓰므로 일시정지·취소가 그대로 적용된다.
+ * - 대체 연출 중 오류로 넘어온 경우('error')도 대사가 있으면 클릭 뒤에 'error'로 끝난다.
  * - 모든 콜백은 세션이 살아 있는지 확인한다 → cancel/skip 뒤 늦은 타이머·ended 이벤트는 무시.
  */
 
@@ -60,6 +71,10 @@ interface Session {
   videoStarted: boolean;
   detachVideo: (() => void) | null;
   sfxOut: GainNode | null;
+  /** 대사 상자 (클릭 대기 중일 때만) */
+  dialogue: Dialogue | null;
+  /** 세션 종료 시 떼어낼 입력 리스너 등 */
+  cleanups: (() => void)[];
 }
 
 type AudioCtor = typeof AudioContext;
@@ -134,6 +149,8 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
       }
       s.sfxOut = null;
     }
+    for (const c of s.cleanups.splice(0)) c();
+    s.dialogue = null;
     s.overlay.remove();
     if (current === s) current = null;
     s.resolve(reason);
@@ -163,7 +180,48 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
       if (step.at <= 0) step.run();
       else s.clock.schedule(() => !s.done && step.run(), step.at);
     }
-    s.clock.schedule(() => finish(s, endReason), scene.duration);
+    const lines = scene.dialogue;
+    if (lines && lines.length) {
+      waitForInput(s);
+      s.clock.schedule(() => {
+        if (s.done) return;
+        s.dialogue = startDialogue({
+          doc,
+          parent: scene.root,
+          lines: [...lines],
+          schedule: (fn, ms) => s.clock.schedule(() => !s.done && fn(), ms),
+          sfx: sfxFor(s),
+          onDone: () => finish(s, endReason),
+        });
+      }, scene.duration);
+    } else s.clock.schedule(() => finish(s, endReason), scene.duration);
+  }
+
+  /** 대사 넘기기 입력: 오버레이 클릭 + Enter/Space. 대사 상자가 나오기 전·일시정지 중에는 무시 */
+  function waitForInput(s: Session): void {
+    s.overlay.classList.add('ap-modal');
+    const advance = () => {
+      if (s.done || paused || !s.dialogue) return false;
+      s.dialogue.advance();
+      return true;
+    };
+    const onClick = (e: Event) => {
+      e.stopPropagation();
+      advance();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+      if (e.repeat || !s.dialogue || paused) return;
+      e.preventDefault();
+      e.stopPropagation();
+      advance();
+    };
+    s.overlay.addEventListener('click', onClick);
+    win.addEventListener('keydown', onKey, true);
+    s.cleanups.push(() => {
+      s.overlay.removeEventListener('click', onClick);
+      win.removeEventListener('keydown', onKey, true);
+    });
   }
 
   function runFallback(s: Session, endReason: AnimationEndReason): void {
@@ -265,6 +323,8 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
         videoStarted: false,
         detachVideo: null,
         sfxOut: null,
+        dialogue: null,
+        cleanups: [],
       };
       current = s;
       if (videoUnavailable.has(kind)) runFallback(s, 'ended');

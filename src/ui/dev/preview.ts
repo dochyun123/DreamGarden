@@ -1,11 +1,11 @@
 // 담당: dream-f4 — UI 개발용 미리보기 (/src/ui/dev/preview.html). 앱 번들에는 포함되지 않는다.
-// 엔진이 완성되기 전 화면 확인용 가짜 상태·동작. ?screen=start|setup|teams|question|leaderboard|admin|menu|long
+// 엔진이 완성되기 전 화면 확인용 가짜 상태·동작. ?screen=start|setup|teams|station|question|leaderboard|admin|menu|long|intro
 import '@fontsource/noto-sans-kr/400.css';
 import '@fontsource/noto-sans-kr/700.css';
 import '@fontsource/noto-sans-kr/900.css';
 import '@fontsource/black-han-sans/400.css';
 import sample from '../../../data/sample-content.json';
-import type { ContentFile, GameState, Team } from '../../types';
+import { SCHEMA_VERSION, type ContentFile, type GameState, type Team } from '../../types';
 import { mountUi, type UiActions, type UiState } from '../ui';
 
 const content = sample as ContentFile;
@@ -17,18 +17,19 @@ const teamCount = Number(params.get('teams') ?? 8);
 const teams: Team[] = Array.from({ length: teamCount }, (_, i) => ({
   id: `team-${i + 1}`,
   name: names[i % names.length] + (i >= names.length ? i : ''),
-  questionSetId: content.questionSets[i % content.questionSets.length].id,
+  // 끝난 팀(1~3)만 말씀을 골랐다. 진행 팀(4)은 station이면 아직 고르기 전
+  questionSetId: i < 3 || (i === 3 && screen !== 'station') ? content.questionSets[i % content.questionSets.length].id : null,
   status: i < 3 ? 'completed' : i === 3 ? 'inProgress' : 'notStarted',
 }));
 
 let state: GameState = {
-  schemaVersion: 1,
+  schemaVersion: SCHEMA_VERSION,
   contentVersion: content.contentVersion,
   questionSets: content.questionSets,
   teams: screen === 'setup' ? [] : teams,
   progress: screen === 'setup' ? null : {
     activeTeamId: 'team-4', questionIndex: 1, lives: 2, passedCount: 1,
-    phase: 'awaitingAnswer', selectedChoiceId: null, runId: 1,
+    phase: screen === 'station' ? 'choosingTrack' : 'awaitingAnswer', selectedChoiceId: null, runId: 1,
   },
   results: screen === 'setup' ? [] : [
     { teamId: 'team-1', passedCount: 5, outcome: 'clear', completedAt: '' },
@@ -66,6 +67,7 @@ const ui: UiState = {
   ] : [],
   animationStuck: params.has('stuck'),
   isFullscreen: false,
+  introPlaying: screen === 'intro',
 };
 
 const log = (...a: unknown[]) => console.log('[preview]', ...a);
@@ -78,6 +80,16 @@ const actions: UiActions = {
   importContent(json) { log('importContent', json); },
   registerTeams(d) { log('registerTeams', d); },
   startChallenge(id) { log('startChallenge', id); },
+  selectTrack(setId) {
+    log('selectTrack', setId);
+    const p = state.progress!;
+    state = {
+      ...state,
+      teams: state.teams.map((t) => (t.id === p.activeTeamId ? { ...t, questionSetId: setId } : t)),
+      progress: { ...p, phase: 'awaitingAnswer', runId: p.runId + 1 },
+    };
+    update();
+  },
   selectChoice(choiceId) {
     log('selectChoice', choiceId);
     const p = state.progress!;

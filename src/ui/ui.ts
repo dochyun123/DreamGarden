@@ -2,15 +2,18 @@
 // UI는 상태를 직접 바꾸지 않는다. render()로 받은 상태를 그리고, 사용자 행동은 actions 호출로만 전달한다.
 import type { GameState, ValidationIssue } from '../types';
 import { lastUndoLabel, type TeamDraft } from '../core/engine';
+import './fonts.css';
 import './tokens.css';
 import './ui.css';
+import './pixel.css';
 import type { Ctx, LocalUi, Screen } from './context';
 import { h } from './dom';
 import { brand } from './brand';
-import { ginkgoLeafIcon, mapleLeafIcon, undoIcon } from './icons';
+import { undoIcon } from './icons';
 import { createStartScreen } from './screens/start';
 import { createSetupScreen } from './screens/setup';
 import { createQuestionScreen } from './screens/question';
+import { createStationScreen } from './screens/station';
 import { createTeamsBody } from './screens/teams';
 import { createLeaderboardBody } from './screens/leaderboard';
 import { createAdminBody, createAdminMenu, createConfirmModal } from './screens/admin';
@@ -34,6 +37,8 @@ export interface UiState {
   /** 연출 재생 오류로 대체 자막 중 → 관리자에게 '연출 건너뛰기' 노출 */
   animationStuck: boolean;
   isFullscreen: boolean;
+  /** 꿈 인트로 재생 중 (행사 첫 시작 때만). 연출 오버레이가 화면 전체를 덮는다 */
+  introPlaying: boolean;
 }
 
 export interface UiActions {
@@ -42,7 +47,8 @@ export interface UiActions {
   returnToChallenge(): void; // 진행 중 도전 화면으로
   importContent(json: unknown): void;
   registerTeams(drafts: TeamDraft[]): void;
-  startChallenge(teamId: string): void;
+  startChallenge(teamId: string): void; // → progress.phase = 'choosingTrack' (기차역)
+  selectTrack(questionSetId: string): void; // 기차역에서 말씀 선택 → 문제 시작
   selectChoice(choiceId: string): void;
   openAdminMenu(): void;
   closeAdminMenu(): void;
@@ -59,48 +65,16 @@ export interface UiHandle {
   animationHost: HTMLElement;
 }
 
-/** 낙엽: [left %, 낙하 시간 s, 시작 지연 s, 크기 px, 모양, 색, 종류]
- *  edge = 문제 화면에서도 남는 가장자리 잎, start = 시작 화면에만 */
-type LeafSpec = [number, number, number, number, 'maple' | 'ginkgo', 'maple' | 'red' | 'ginkgo', 'edge' | 'normal' | 'start'];
-const LEAVES: LeafSpec[] = [
-  [2.5, 30, -4, 37, 'maple', 'maple', 'edge'],
-  [96.5, 34, -15, 32, 'ginkgo', 'ginkgo', 'edge'],
-  [1, 38, -24, 28, 'maple', 'red', 'edge'],
-  [14, 26, -8, 40, 'ginkgo', 'ginkgo', 'normal'],
-  [27, 31, -19, 49, 'maple', 'red', 'normal'],
-  [52, 28, -2, 38, 'maple', 'maple', 'normal'],
-  [68, 35, -11, 43, 'ginkgo', 'ginkgo', 'normal'],
-  [83, 27, -20, 46, 'maple', 'red', 'normal'],
-  [40, 33, -26, 35, 'ginkgo', 'ginkgo', 'normal'],
-  [8, 20, -6, 68, 'maple', 'maple', 'start'],
-  [21, 23, -14, 51, 'ginkgo', 'ginkgo', 'start'],
-  [60, 19, -3, 65, 'maple', 'red', 'start'],
-  [76, 24, -17, 54, 'ginkgo', 'ginkgo', 'start'],
-  [90, 21, -9, 71, 'maple', 'maple', 'start'],
-  [46, 25, -12, 51, 'maple', 'maple', 'start'],
-];
-
-function createLeaves(): HTMLElement {
-  return h('div', { class: 'leaves', attrs: { 'aria-hidden': 'true' } },
-    LEAVES.map(([x, d, delay, size, shape, color, kind]) =>
-      h('span', {
-        class: `leaf leaf--${kind}`,
-        style: { '--x': `${x}%`, '--d': `${d}s`, '--delay': `${delay}s`, '--s': `${size}px`, '--leaf-color': `var(--c-leaf-${color})` },
-      }, shape === 'maple' ? mapleLeafIcon() : ginkgoLeafIcon()),
-    ),
-  );
-}
-
 const STAGE_W = 1920;
 const STAGE_H = 1080;
 
-type ScreenKey = 'start' | 'setup' | 'question' | 'tabs';
+type ScreenKey = 'start' | 'setup' | 'station' | 'question' | 'tabs';
 type TabView = 'teams' | 'leaderboard' | 'admin';
 
 function screenKeyFor(state: GameState, ui: UiState): ScreenKey {
   if (!ui.started) return 'start';
   if (ui.view === 'setup') return 'setup';
-  if (ui.view === 'question' && state.progress) return 'question';
+  if (ui.view === 'question' && state.progress) return state.progress.phase === 'choosingTrack' ? 'station' : 'question';
   return 'tabs';
 }
 
@@ -197,7 +171,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     attrs: { type: 'button', 'aria-label': '되돌리기' },
     on: { click: () => { if (!undoBtn.disabled) actions.undo(); } },
   }, undoIcon());
-  stage.append(createLeaves(), screenLayer, animationHost, overlay, undoBtn, modalLayer);
+  stage.append(screenLayer, animationHost, overlay, undoBtn, modalLayer);
   root.replaceChildren(stage);
 
   // 16:9 비율 유지 — 남는 영역은 .ui-root 배경
@@ -229,6 +203,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
   const factories: Record<ScreenKey, () => Screen> = {
     start: () => createStartScreen(ctx),
     setup: () => { local.setup = null; return createSetupScreen(ctx); },
+    station: () => createStationScreen(ctx),
     question: () => createQuestionScreen(ctx),
     tabs: () => createTabsScreen(ctx),
   };
@@ -268,11 +243,13 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     }
 
     const label = lastUndoLabel(state);
-    undoBtn.hidden = !ui.started || key === 'setup' || key === 'start';
+    undoBtn.hidden = !ui.started || ui.introPlaying || key === 'setup' || key === 'start';
     undoBtn.disabled = !label;
     undoBtn.title = label ? `되돌리기: ${label}` : '되돌릴 행동이 없습니다';
 
     stage.classList.toggle('is-paused', ui.adminMenuOpen);
+    // 꿈 인트로: 연출 오버레이만 보이고 아래 화면은 감춘다 (차분한 배경만)
+    stage.classList.toggle('is-intro', ui.started && ui.introPlaying);
     stage.dataset.view = key === 'tabs' ? ui.view : key;
   }
 

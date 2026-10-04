@@ -1,0 +1,361 @@
+/* 담당: 픽셀 UI 화면 — 게임 화면(시작 / 기차역 / 문제) 픽셀아트 스타일.
+   각진 4px 외곽선(모서리 한 칸 깎임) + 안쪽 명암 = 마인크래프트·스타듀밸리 느낌.
+   문제·보기 글자는 픽셀 글꼴을 쓰지 않는다 (TV 가독성). */
+
+/* ───────── 공통: 픽셀 상자 ─────────
+   box-shadow 4방향으로 외곽선을 그리면 모서리가 한 칸 비어 계단 모양이 된다 */
+.g-plate, .g-btn, .choice, .st-sign {
+  --px-bg: var(--c-surface);
+  --px-edge: var(--c-px-line);
+  --px-light: rgba(255, 255, 255, 0.14);
+  --px-shade: rgba(0, 0, 0, 0.32);
+  border: 0;
+  border-radius: 0;
+  background: var(--px-bg);
+  box-shadow:
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 0 var(--px-shade),
+    inset var(--px) var(--px) 0 0 var(--px-light),
+    0 calc(var(--px) * -1) 0 0 var(--px-edge),
+    0 var(--px) 0 0 var(--px-edge),
+    calc(var(--px) * -1) 0 0 0 var(--px-edge),
+    var(--px) 0 0 0 var(--px-edge);
+  image-rendering: pixelated;
+}
+
+/* 이름표 (팀명·목숨) */
+.g-plate {
+  --px-bg: var(--c-car-wall-dark);
+  --px-edge: var(--c-px-line);
+  font-family: var(--font-pixel);
+  font-weight: var(--fw-bold);
+}
+
+/* 픽셀 버튼 */
+.g-btn {
+  --px-bg: var(--c-accent);
+  min-height: 104px;
+  padding: 0 72px;
+  font-family: var(--font-pixel);
+  font-size: 48px;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.g-btn:hover { transform: translateY(-4px); }
+.g-btn:active { transform: translateY(2px); --px-light: transparent; }
+.g-btn--lamp { --px-bg: var(--c-lamp); color: var(--c-on-highlight); }
+.g-btn--lamp:hover { --px-bg: #ffe08a; }
+
+/* ───────── 시작 화면: 꿈속 밤하늘 + 지하철 ───────── */
+.start {
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  text-align: center;
+  background: linear-gradient(180deg, #0b0a22 0%, #1a1745 60%, #241f55 100%);
+}
+.start__stars {
+  position: absolute;
+  left: 0; top: 0;
+  width: var(--px); height: var(--px);
+  background: transparent;
+  color: #fff6c8;
+  box-shadow:
+    120px 90px, 340px 210px, 520px 70px, 700px 160px, 880px 60px, 1060px 230px,
+    1240px 110px, 1420px 50px, 1600px 190px, 1780px 100px, 240px 380px, 610px 330px,
+    1000px 360px, 1350px 320px, 1700px 400px, 80px 560px, 460px 600px, 1520px 580px,
+    1850px 640px, 180px 760px, 1650px 760px,
+    300px 140px #8f86ff, 960px 120px #8f86ff, 1500px 260px #8f86ff, 760px 460px #8f86ff, 1200px 520px #8f86ff;
+  animation: px-twinkle 3.2s steps(2) infinite;
+  pointer-events: none;
+}
+@keyframes px-twinkle { 50% { opacity: 0.55; } }
+.start__title {
+  position: relative;
+  margin: 0 0 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  font-family: var(--font-pixel);
+  font-weight: var(--fw-bold);
+  line-height: 1.1;
+  /* 픽셀 그림자: 흐림 없이 한 칸씩 */
+  text-shadow: 6px 6px 0 var(--c-px-line);
+}
+.start__title-main { font-size: 88px; letter-spacing: 0.02em; }
+.start__title-accent {
+  font-size: 200px;
+  color: var(--c-highlight);
+  text-shadow: 10px 10px 0 var(--c-px-line), 0 0 60px var(--c-glow);
+}
+.start .g-btn { position: relative; min-width: 420px; }
+.start__train {
+  position: absolute;
+  left: 0; right: 0; bottom: 24px;
+  width: 1920px;
+  height: 320px;
+  image-rendering: pixelated;
+  pointer-events: none; /* 그림 상자가 시작 버튼 아래쪽을 덮으므로 클릭을 통과시킨다 */
+}
+
+/* ───────── 기차역 (갈림길 고르기) ───────── */
+.station {
+  padding: 56px var(--gutter) 200px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 40px;
+  background:
+    /* 타일 벽 */
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 4px, transparent 4px 64px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.28) 0 4px, transparent 4px 96px),
+    linear-gradient(180deg, #1a1838 0%, #24214a 70%, #1a1838 100%);
+}
+.st-bg { position: absolute; inset: 0; pointer-events: none; }
+/* 천장 형광등 줄 */
+.st-lamps {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 16px;
+  background: repeating-linear-gradient(90deg, var(--c-px-line) 0 120px, var(--c-lamp) 120px 360px, var(--c-px-line) 360px 480px);
+  box-shadow: 0 8px 0 var(--c-px-line), 0 30px 60px rgba(255, 210, 90, 0.18);
+}
+/* 승강장 끝: 노란 안전선 + 콘크리트 */
+.st-platform {
+  position: absolute;
+  left: 0; right: 0; bottom: 104px;
+  height: 64px;
+  background:
+    repeating-linear-gradient(90deg, var(--c-lamp) 0 40px, #2b2850 40px 56px) top / 100% 12px no-repeat,
+    linear-gradient(180deg, #3a366a, #2b2850);
+  box-shadow: 0 -4px 0 var(--c-px-line), 0 4px 0 var(--c-px-line);
+}
+/* 선로 */
+.st-rails {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 100px;
+  background:
+    linear-gradient(180deg, transparent 30px, #8a84b8 30px 38px, transparent 38px 70px, #8a84b8 70px 78px, transparent 78px),
+    repeating-linear-gradient(90deg, #2a2245 0 24px, transparent 24px 64px),
+    #0d0c1f;
+}
+.st-head { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.st-team { margin: 0; padding: 14px 48px; font-size: var(--fs-team); line-height: 1.15; }
+.st-hint { margin: 0; font-family: var(--font-pixel); font-weight: var(--fw-bold); font-size: 36px; color: var(--c-text-dim); text-shadow: 4px 4px 0 var(--c-px-line); }
+
+.st-signs {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: center;
+  gap: 40px 36px;
+  max-height: 600px;
+}
+/* 역 표지판 */
+.st-sign {
+  --px-bg: var(--c-sign);
+  --px-light: rgba(255, 255, 255, 0.2);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 16px 48px;
+  font-family: var(--font-pixel);
+  color: #fff;
+  text-align: center;
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.st-sign__num {
+  display: grid;
+  place-items: center;
+  width: 64px; height: 64px;
+  background: #fff;
+  color: var(--c-sign);
+  font-size: 40px;
+  font-weight: var(--fw-bold);
+  box-shadow: 0 0 0 4px var(--c-px-line);
+}
+.st-sign__ref { font-size: 38px; font-weight: var(--fw-bold); line-height: 1.25; text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35); }
+/* 신호등: 초록 = 고를 수 있음, 빨강 = 닫힘 */
+.st-sign__lamp {
+  position: absolute;
+  bottom: 14px;
+  width: 20px; height: 20px;
+  background: var(--c-signal-go);
+  box-shadow: 0 0 0 4px var(--c-px-line), 0 0 18px var(--c-signal-go);
+}
+.st-signs:not(.is-locked) .st-sign:not(:disabled):hover {
+  --px-bg: var(--c-sign-light);
+  --px-edge: var(--c-lamp);
+  transform: translateY(-8px);
+}
+.st-signs.is-locked .st-sign { cursor: default; }
+.st-sign.is-picked { --px-bg: var(--c-lamp); --px-edge: #fff; color: var(--c-on-highlight); }
+.st-sign.is-picked .st-sign__num { color: var(--c-on-highlight); }
+/* 다른 팀이 고른 갈림길: 어둡게 + 셔터 + 빨간 신호 */
+.st-sign.is-taken {
+  --px-bg: #24223a;
+  --px-light: transparent;
+  color: #5d5a7a;
+  cursor: not-allowed;
+}
+.st-sign.is-taken::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0 8px, rgba(255, 255, 255, 0.05) 8px 20px);
+}
+.st-sign.is-taken .st-sign__num { background: #4a4766; color: #24223a; }
+.st-sign.is-taken .st-sign__ref { text-shadow: none; }
+.st-sign.is-taken .st-sign__lamp { background: var(--c-signal-stop); box-shadow: 0 0 0 4px var(--c-px-line), 0 0 18px var(--c-signal-stop); }
+
+/* ───────── 문제 화면: 운전석에서 내다본 지하 터널 (사용자 그림) ─────────
+   game-bg.png(1536×1024)를 cover → 1.25배(1920×1280). 남는 200px은 위 천장에서 140px, 아래에서 60px 자른다.
+   전체를 30% 어둡게 덮어 문제·보기 판 뒤를 차분하게. 움직임: 아주 약한 흔들림 + 가끔 창을 스치는 빛. ?lite=1이면 정지. */
+.question { padding: 56px var(--gutter) 64px; box-sizing: border-box; background: var(--c-bg-deep); }
+.cab {
+  position: absolute;
+  inset: -4px; /* 흔들려도 가장자리가 비지 않게 */
+  overflow: hidden;
+  pointer-events: none;
+  animation: cab-sway 4.8s steps(1) infinite;
+}
+@keyframes cab-sway {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(0, 2px); }
+  50% { transform: translate(2px, 3px); }
+  75% { transform: translate(0, 1px); }
+}
+.cab__view {
+  position: absolute;
+  inset: 0;
+  background: url('./assets/game-bg.png') center 70% / cover no-repeat;
+  image-rendering: pixelated;
+}
+.cab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 7, 26, 0.3);
+}
+/* 앞 유리창 영역 (그림 좌표 × 1.25 - 위 140px, .cab inset 4px 보정) */
+.cab__glass { position: absolute; left: 544px; top: 33px; width: 1015px; height: 797px; overflow: hidden; }
+.cab__glint {
+  position: absolute;
+  top: -40px; bottom: -40px;
+  left: -360px;
+  width: 200px;
+  background: linear-gradient(90deg, transparent, rgba(255, 220, 140, 0.08) 35%, rgba(255, 235, 180, 0.14) 50%, rgba(255, 220, 140, 0.08) 65%, transparent);
+  transform: skewX(-18deg);
+  animation: cab-glint 10s steps(12, jump-none) infinite;
+}
+@keyframes cab-glint {
+  0%, 88% { left: -360px; }
+  100% { left: 1200px; }
+}
+.question.is-lite .cab { animation: none; }
+.question.is-lite .cab__glint { display: none; }
+
+.q-head { position: relative; z-index: 1; flex: none; height: 200px; margin: 0 -40px; display: flex; justify-content: center; align-items: flex-start; }
+.q-team { margin: 20px 0 0; padding: 14px 48px; font-size: var(--fs-team); line-height: 1.15; }
+.q-lives { position: absolute; right: 50px; top: 8px; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px 24px 18px; }
+.q-lives__label { font-size: 28px; color: var(--c-text-dim); }
+.q-lives__hearts { display: flex; gap: 18px; }
+.heart {
+  width: 54px; height: 48px;
+  display: block;
+  color: var(--c-heart);
+  shape-rendering: crispEdges;
+  filter: drop-shadow(4px 4px 0 var(--c-px-line));
+  transition: color var(--t-med), transform var(--t-med);
+}
+.heart.is-empty { color: var(--c-heart-empty); transform: scale(0.85); }
+
+.q-body {
+  position: relative; z-index: 1;
+  flex: none; margin: auto 0; align-self: center; max-width: 1640px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 22px;
+  padding: 28px 56px 36px;
+  /* 불투명 판 — 터널이 글자 뒤로 비치지 않게 */
+  background: var(--c-surface-sunken);
+  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.3), inset 4px 4px 0 rgba(255, 255, 255, 0.06),
+    0 -4px 0 var(--c-px-line), 0 4px 0 var(--c-px-line), -4px 0 0 var(--c-px-line), 4px 0 0 var(--c-px-line), 0 12px 0 rgba(0, 0, 0, 0.4);
+}
+.q-instruction { font-family: var(--font-pixel); font-weight: var(--fw-bold); font-size: 34px; color: var(--c-text-dim); text-shadow: 4px 4px 0 var(--c-px-line); }
+.q-prompt {
+  margin: 0;
+  max-width: 1600px;
+  font-size: var(--fs-question);
+  font-weight: var(--fw-bold);
+  line-height: 1.5;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+}
+.q-prompt.is-long { font-size: var(--fs-question-long); }
+.q-blank {
+  display: inline-block;
+  min-width: 4.2em;
+  margin: 0 0.18em;
+  color: var(--c-highlight);
+  border-bottom: 8px solid var(--c-highlight);
+  line-height: 1.05;
+  vertical-align: baseline;
+}
+
+.choices {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px 44px;
+  padding: 0 4px;
+  margin-top: 20px; /* 긴 문제로 판이 커져도 보기와 붙지 않게 */
+}
+.choice {
+  --px-bg: var(--c-surface);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  min-height: 116px;
+  padding: 14px 32px 14px 22px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--t-fast), opacity var(--t-med);
+}
+.choice:nth-child(5) { grid-column: 1 / -1; }
+.choice__num {
+  flex: none;
+  width: 72px; height: 72px;
+  display: grid;
+  place-items: center;
+  background: var(--c-accent);
+  font-family: var(--font-pixel);
+  font-size: 44px;
+  font-weight: var(--fw-bold);
+  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.3), 0 0 0 4px var(--c-px-line);
+}
+.choice__text { font-size: var(--fs-choice); font-weight: var(--fw-bold); line-height: 1.25; }
+.choices.is-long .choice__text { font-size: var(--fs-choice-long); }
+
+/* 대기 → 마우스 올림 */
+.choices.is-open .choice:hover { --px-bg: var(--c-surface-raised); --px-edge: var(--c-accent-strong); transform: translateY(-4px); }
+.choices.is-open .choice:hover .choice__num { background: var(--c-accent-strong); }
+/* 잠금 */
+.choices.is-locked .choice { cursor: default; }
+.choices.is-locked .choice:not(.is-selected) { opacity: 0.5; }
+/* 선택 = 램프 노랑 테두리 */
+.choice.is-selected { --px-bg: var(--c-surface-selected); --px-edge: var(--c-lamp); opacity: 1; }
+.choice.is-selected .choice__num { background: var(--c-lamp); color: var(--c-on-highlight); }
+
+/* 픽셀 화면의 관리 아이콘은 네모 */
+.station .admin-fab, .question .admin-fab { border-radius: 0; }
+.undo-fab { border-radius: 0; }

@@ -1,0 +1,13 @@
+/* 담당: dream-f4 — 픽셀 글꼴 Galmuri11 (OFL). 쓰는 두 굵기만 직접 등록해 번들을 작게 유지 */
+@font-face {
+  font-family: Galmuri11;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../node_modules/galmuri/dist/Galmuri11.woff2') format('woff2');
+}
+@font-face {
+  font-family: Galmuri11;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../node_modules/galmuri/dist/Galmuri11-Bold.woff2') format('woff2');
+}

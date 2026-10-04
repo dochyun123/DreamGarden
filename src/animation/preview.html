@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>연출 미리보기</title>
-    <!-- 개발용: npm run dev 후 /src/animation/preview.html 로 열어 연출만 확인 -->
+    <!-- 개발용: npx vite --port 5175 후 /src/animation/preview.html 로 열어 연출만 확인 -->
     <style>
       body { margin: 0; background: #000; font-family: sans-serif; color: #fff; }
       #bar { display: flex; gap: 8px; padding: 8px; flex-wrap: wrap; }
@@ -14,11 +14,14 @@
   </head>
   <body>
     <div id="bar">
+      <button data-k="intro">꿈 인트로</button>
       <button data-k="correct">정답</button>
       <button data-k="wrong">오답(3→2)</button>
       <button data-k="wrong0">오답(1→0)</button>
       <button data-k="inferno">불구덩이</button>
       <button data-k="heaven">천국</button>
+      <button data-k="heavenRef">천국(말씀 출처)</button>
+      <label><input type="checkbox" id="lite" /> lite</label>
       <button id="pause">일시정지/재개</button>
       <button id="skip">건너뛰기</button>
       <span id="log"></span>
@@ -33,16 +36,27 @@
         b.addEventListener('click', async () => {
           await player.unlockAudio();
           const k = b.dataset.k;
-          const ctx = k === 'wrong0' ? { teamName: '믿음팀', livesBefore: 1, livesAfter: 0 } : { teamName: '믿음팀', livesBefore: 3, livesAfter: 2 };
+          const ctx =
+            k === 'intro' ? { teamName: '', livesBefore: 3, livesAfter: 3 }
+            : k === 'wrong0' ? { teamName: '믿음팀', livesBefore: 1, livesAfter: 0 }
+            : k === 'heavenRef' ? { teamName: '믿음팀', livesBefore: 3, livesAfter: 3, scriptureReference: '요한복음 3:16' }
+            : { teamName: '믿음팀', livesBefore: 3, livesAfter: 2 };
+          const kind = k === 'wrong0' ? 'wrong' : k === 'heavenRef' ? 'heaven' : k;
           const t0 = performance.now();
           log.textContent = '재생 중…';
-          const r = await player.play(k === 'wrong0' ? 'wrong' : k, ctx);
+          const r = await player.play(kind, ctx);
           log.textContent = `${k}: ${r} (${Math.round(performance.now() - t0)}ms)`;
         }),
       );
       document.getElementById('pause').onclick = () => { paused ? player.resume() : player.pause(); paused = !paused; };
       document.getElementById('skip').onclick = () => player.skip();
+      const lite = document.getElementById('lite');
+      lite.checked = new URLSearchParams(location.search).get('lite') === '1';
+      lite.onchange = () => { location.search = lite.checked ? '?lite=1' : ''; };
       window.__player = player;
+      // ?play=heavenRef 처럼 주소로 바로 재생 (헤드리스 캡처용)
+      const auto = new URLSearchParams(location.search).get('play');
+      if (auto) document.querySelector(`[data-k="${CSS.escape(auto)}"]`)?.click();
     </script>
   </body>
 </html>

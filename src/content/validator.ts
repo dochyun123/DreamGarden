@@ -54,12 +54,17 @@ export function parseContentFile(json: unknown): { content: ContentFile | null; 
   return { content: { contentVersion: (json.contentVersion as string).trim(), questionSets }, issues };
 }
 
-/** 팀 등록 검증: 공백 이름, 중복 이름(앞뒤 공백 무시), 세트 연결 누락/존재하지 않는 세트. */
+/** 팀 등록 검증: 공백 이름, 중복 이름(앞뒤 공백 무시), 팀 수가 말씀(세트) 수보다 많으면 오류 — 팀마다 서로 다른 길을 골라야 한다. */
 export function validateTeamDrafts(drafts: TeamDraft[], content: ContentFile): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (drafts.length === 0) issues.push({ location: '팀 등록', message: '팀을 1개 이상 등록해야 합니다.' });
+  if (drafts.length > content.questionSets.length) {
+    issues.push({
+      location: '팀 등록',
+      message: `팀(${drafts.length}개)이 말씀 세트(${content.questionSets.length}개)보다 많습니다. 팀마다 다른 말씀을 골라야 합니다.`,
+    });
+  }
 
-  const setIds = new Set(content.questionSets.map((s) => s.id));
   const seen = new Map<string, number>();
   drafts.forEach((draft, i) => {
     const name = draft.name.trim();
@@ -70,11 +75,6 @@ export function validateTeamDrafts(drafts: TeamDraft[], content: ContentFile): V
       issues.push({ location, message: `팀 ${seen.get(name)! + 1}번과 이름이 같습니다.` });
     } else {
       seen.set(name, i);
-    }
-    if (!draft.questionSetId) {
-      issues.push({ location, message: '문제 세트가 연결되지 않았습니다.' });
-    } else if (!setIds.has(draft.questionSetId)) {
-      issues.push({ location, message: `문제 세트 "${draft.questionSetId}"가 존재하지 않습니다.` });
     }
   });
   return issues;

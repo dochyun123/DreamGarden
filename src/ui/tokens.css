@@ -1,57 +1,69 @@
 /* 담당: dream-f4 — 디자인 토큰. 색·글자·간격은 여기서만 바꾼다.
    기준: 1920×1080 스테이지 (px 값은 스테이지 좌표 기준, 실제 화면에서는 transform scale) */
 :root {
-  /* 색상 — 가을 팔레트 (리드 확정). 변수 이름은 시안 때와 같고 값만 가을색 */
-  --c-bg: #1e1410;               /* 진한 호두색 */
-  --c-bg-top: #2b1a12;           /* 스테이지 위쪽 그라데이션 */
-  --c-bg-deep: #120c09;          /* 스테이지 바깥 여백 */
-  --c-surface: #3a261a;          /* 보기·카드 */
-  --c-surface-raised: #4a3122;   /* hover */
-  --c-surface-sunken: #2a1b13;
-  --c-surface-selected: #553722;
-  --c-border: #6b4a33;           /* 분명한 외곽선 */
-  --c-border-strong: #a07454;
-  --c-accent: #d9682b;           /* 번호·주요 버튼 (호박 주황) */
-  --c-accent-strong: #ec7d3e;
-  --c-highlight: #ffcf6b;        /* 빈칸·선택·'암송' 강조 (황금빛) */
-  --c-on-highlight: #2a1a08;     /* 강조색 위 글자 */
-  --c-text: #fff4e6;             /* 크림색 본문 */
-  --c-text-dim: #dcc6ae;
-  --c-text-faint: #9f846c;
-  --c-heart: #e2553b;            /* 단풍 빨강 */
-  --c-heart-empty: #5a3e2e;
-  --c-success: #8fa35b;          /* 클리어 (올리브) */
-  --c-danger: #c8442f;           /* 오답·탈락 */
-  --c-correct: #ffcf6b;          /* 정답 = 황금빛 */
+  /* 색상 — 꿈속 지하철 팔레트: 어두운 터널 남색·보라 + 따뜻한 램프 노랑 + 신호등 */
+  --c-bg: #13122b;               /* 터널 남보라 */
+  --c-bg-top: #1d1a40;           /* 스테이지 위쪽 그라데이션 */
+  --c-bg-deep: #08071a;          /* 스테이지 바깥 여백 */
+  --c-surface: #25224c;          /* 보기·카드 */
+  --c-surface-raised: #312d62;   /* hover */
+  --c-surface-sunken: #1a1838;
+  --c-surface-selected: #3d3474;
+  --c-border: #48437f;           /* 분명한 외곽선 */
+  --c-border-strong: #7d77c4;
+  --c-accent: #6a52d9;           /* 번호·주요 버튼 (꿈 보라) */
+  --c-accent-strong: #8a72f5;
+  --c-highlight: #ffd25a;        /* 빈칸·선택·'암송' 강조 (램프 노랑) */
+  --c-on-highlight: #241a05;     /* 강조색 위 글자 */
+  --c-text: #f4f1ff;             /* 본문 */
+  --c-text-dim: #c3bde6;
+  --c-text-faint: #8a84b8;
+  --c-heart: #ff4d5e;            /* 픽셀 하트 */
+  --c-heart-empty: #3a3566;
+  --c-success: #5ee08a;          /* 신호등 초록 (클리어) */
+  --c-danger: #ff5a4d;           /* 신호등 빨강 (오답·탈락) */
+  --c-correct: #ffd25a;
   --c-correct-edge: #e8a43a;
   --c-warning: #f0a542;
   --c-on-warning: #2a1600;
-  --c-glow: rgba(255, 170, 90, 0.55);
-  --c-scrim: rgba(18, 10, 6, 0.72);
+  --c-glow: rgba(255, 210, 90, 0.45);
+  --c-scrim: rgba(6, 5, 20, 0.75);
 
   /* 관리 콘솔 — 같은 계열을 채도만 낮춘 차분한 운영자 톤 */
-  --c-console-bg: #251912;
-  --c-console-surface: #2e2018;
-  --c-console-hover: #3a2a1f;
-  --c-console-line: #3a2a1f;
-  --c-console-line-strong: #54402f;
-  --c-console-text: #efe3d4;
-  --c-console-dim: #a8927e;
+  --c-console-bg: #171629;
+  --c-console-surface: #201f36;
+  --c-console-hover: #2a2944;
+  --c-console-line: #2a2944;
+  --c-console-line-strong: #423f63;
+  --c-console-text: #e6e4f2;
+  --c-console-dim: #9a97b8;
 
-  /* 무대 조명 — 따뜻한 호박빛 (정적 그라디언트, 문제 읽는 동안 움직임 최소화) */
-  --light-spot-a: rgba(255, 170, 90, 0.15);
-  --light-spot-c: rgba(255, 190, 120, 0.10);
-  --light-spot-b: rgba(255, 207, 107, 0.07);
+  /* 무대 조명 — 은은한 보라빛 (정적 그라디언트, 문제 읽는 동안 움직임 최소화) */
+  --light-spot-a: rgba(140, 110, 255, 0.14);
+  --light-spot-c: rgba(120, 140, 255, 0.08);
+  --light-spot-b: rgba(255, 210, 90, 0.06);
 
-  /* 낙엽 장식 */
-  --c-leaf-maple: #d9682b;
-  --c-leaf-red: #b8452c;
-  --c-leaf-ginkgo: #e8b04a;
+  /* 픽셀 장면 (기차역·기차 안) */
+  --px: 4px;                     /* 픽셀 한 칸 */
+  --c-px-line: #05040f;          /* 픽셀 외곽선 */
+  --c-tunnel: #0a0918;           /* 창밖 터널 */
+  --c-tunnel-wall: #16142e;
+  --c-car-wall: #2a2650;         /* 객차 벽 */
+  --c-car-wall-dark: #1f1c3e;
+  --c-car-trim: #48437f;
+  --c-lamp: #ffd25a;             /* 램프 */
+  --c-lamp-dim: #b98a2a;
+  --c-signal-go: #5ee08a;
+  --c-signal-stop: #ff5a4d;
+  --c-sign: #1f4fa8;             /* 역 표지판 파랑 */
+  --c-sign-light: #3b74d6;
 
   /* 글꼴 */
   /* 자체 호스팅(src/main.ts에서 @fontsource 로드). 오프라인 폴백 포함 */
   --font-sans: "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
   --font-display: "Black Han Sans", "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  /* 픽셀 글꼴 (galmuri, fonts.css) — 제목·팀명·표지판·라벨용. 문제·보기는 쓰지 않는다 (TV 가독성) */
+  --font-pixel: "Galmuri11", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --fw-regular: 400;
   --fw-bold: 700;
   --fw-black: 900;
