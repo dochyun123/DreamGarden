@@ -1,7 +1,7 @@
 // 담당: dream-20 — 문제 JSON 검증, 팀 등록 검증.
 import { CHOICES_PER_QUESTION, QUESTIONS_PER_SET } from '../types';
 import type { Choice, ContentFile, Question, QuestionSet, ValidationIssue } from '../types';
-import type { TeamDraft } from '../core/engine';
+import type { SetupDraft, TeamDraft } from '../core/engine';
 
 const BLANK_PATTERN = /_{3,}/;
 
@@ -76,6 +76,20 @@ export function validateTeamDrafts(drafts: TeamDraft[], content: ContentFile): V
     } else {
       seen.set(name, i);
     }
+  });
+  return issues;
+}
+
+/** 관리 화면 저장 검증: 팀 이름(validateTeamDrafts와 같은 규칙) + 모든 갈림길의 말씀 출처·구절이 비어 있지 않은지. */
+export function validateSetup(draft: SetupDraft, content: ContentFile): ValidationIssue[] {
+  const issues = validateTeamDrafts(draft.teamNames.map((name) => ({ name })), content);
+  if (draft.scriptures.length !== content.questionSets.length) {
+    issues.push({ location: '말씀', message: `말씀이 ${content.questionSets.length}개여야 하는데 ${draft.scriptures.length}개입니다.` });
+  }
+  draft.scriptures.forEach((d, i) => {
+    const location = `말씀 ${i + 1}번`;
+    if (!d.scriptureReference.trim()) issues.push({ location, message: '말씀 출처가 비어 있습니다.' });
+    if (!d.scriptureText.trim()) issues.push({ location, message: '구절이 비어 있습니다.' });
   });
   return issues;
 }

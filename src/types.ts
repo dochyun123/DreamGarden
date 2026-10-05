@@ -104,16 +104,6 @@ export interface GameState {
   undoHistory: UndoEntry[];
 }
 
-// ───────── 리더보드 ─────────
-
-export interface LeaderboardRow {
-  rank: number; // 공동 순위, 다음 점수는 +1 (5,5,3,0 → 1,1,2,3)
-  teamId: string;
-  teamName: string;
-  passedCount: number;
-  cleared: boolean;
-}
-
 // ───────── 검증 ─────────
 
 export interface ValidationIssue {

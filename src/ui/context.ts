@@ -1,4 +1,4 @@
-// 담당: dream-f4 — 화면 컴포넌트가 공유하는 타입과 화면 내부 상태(영속 안 함)
+// 담당: dream-2a — 화면 컴포넌트가 공유하는 타입과 화면 내부 상태(영속 안 함)
 import type { GameState } from '../types';
 import type { UiActions, UiState } from './ui';
 
@@ -8,22 +8,22 @@ export interface Screen {
   update(state: GameState, ui: UiState): void;
 }
 
-export interface SetupRowDraft {
-  name: string;
+/** 관리 화면 입력 중인 값 (저장 전까지 UI만 가진다) */
+export interface SetupForm {
+  teamNames: string[]; // 길이 = 팀 수
+  scriptures: { scriptureReference: string; scriptureText: string }[]; // state.questionSets 순서
 }
 
-/** UI 내부 전용 상태 — 페이지 번호, 하위 화면, 확인 모달 등 (app의 UiState와 별개) */
+/** UI 내부 전용 상태 (app의 UiState와 별개) */
 export interface LocalUi {
-  teamsPage: number;
-  adminSub: 'main' | 'review';
-  reviewSetId: string | null;
-  /** 자체 확인 모달 (window.confirm 대신) */
-  confirm: { kind: 'reset' } | { kind: 'reveal'; setId: string } | null;
-  /** 진행 중인 팀의 세트를 검수 화면에 공개하기로 확인했는가 (관리 화면을 다시 열면 초기화) */
-  revealedSetId: string | null;
+  /** 자체 확인 모달 (window.confirm 대신): 관리 화면 저장 → 기록 초기화 확인 */
+  confirm: { kind: 'save'; onOk: () => void } | null;
   /** 보기 클릭 즉시 잠금: 이 runId에서는 다시 선택할 수 없다 */
   lock: { runId: number; choiceId: string } | null;
-  setup: { count: number; rows: SetupRowDraft[]; parseError: string | null } | null;
+  /** 관리 화면 입력값. 관리 화면에 들어올 때 state로 다시 채운다 */
+  setup: SetupForm | null;
+  /** home에서 '게임 시작'을 눌러 팀 목록을 펼쳤는가 */
+  pickingTeam: boolean;
 }
 
 export interface Ctx {
@@ -32,6 +32,3 @@ export interface Ctx {
   /** 내부 상태만 바뀌었을 때 마지막 state로 다시 그린다 */
   rerender(): void;
 }
-
-export const TEAMS_PER_PAGE = 8;
-export const MAX_TEAMS = 24;

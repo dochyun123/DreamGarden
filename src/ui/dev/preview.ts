@@ -1,5 +1,5 @@
-// 담당: dream-f4 — UI 개발용 미리보기 (/src/ui/dev/preview.html). 앱 번들에는 포함되지 않는다.
-// 엔진이 완성되기 전 화면 확인용 가짜 상태·동작. ?screen=start|setup|teams|station|question|leaderboard|admin|menu|long|intro
+// 담당: dream-2a — UI 개발용 미리보기 (/src/ui/dev/preview.html). 앱 번들에는 포함되지 않는다.
+// 엔진이 완성되기 전 화면 확인용 가짜 상태·동작. ?screen=start|home|pick|setup|setup-new|station|question|menu|long|intro
 import '@fontsource/noto-sans-kr/400.css';
 import '@fontsource/noto-sans-kr/700.css';
 import '@fontsource/noto-sans-kr/900.css';
@@ -13,25 +13,28 @@ const params = new URLSearchParams(location.search);
 const screen = params.get('screen') ?? 'question';
 const names = ['믿음팀', '소망팀', '사랑팀', '은혜팀', '평강팀', '기쁨팀', '온유팀', '절제팀', '충성팀', '화평팀'];
 const teamCount = Number(params.get('teams') ?? 8);
+/** home·pick·setup: 진행 중인 도전 없음 (팀 4는 아직 미도전). setup-new: 팀도 기록도 없음 */
+const idle = ['home', 'pick', 'setup', 'setup-new'].includes(screen);
+const fresh = screen === 'setup-new';
 
 const teams: Team[] = Array.from({ length: teamCount }, (_, i) => ({
   id: `team-${i + 1}`,
   name: names[i % names.length] + (i >= names.length ? i : ''),
   // 끝난 팀(1~3)만 말씀을 골랐다. 진행 팀(4)은 station이면 아직 고르기 전
-  questionSetId: i < 3 || (i === 3 && screen !== 'station') ? content.questionSets[i % content.questionSets.length].id : null,
-  status: i < 3 ? 'completed' : i === 3 ? 'inProgress' : 'notStarted',
+  questionSetId: i < 3 || (i === 3 && !idle && screen !== 'station') ? content.questionSets[i % content.questionSets.length].id : null,
+  status: i < 3 ? 'completed' : i === 3 && !idle ? 'inProgress' : 'notStarted',
 }));
 
 let state: GameState = {
   schemaVersion: SCHEMA_VERSION,
   contentVersion: content.contentVersion,
   questionSets: content.questionSets,
-  teams: screen === 'setup' ? [] : teams,
-  progress: screen === 'setup' ? null : {
+  teams: fresh ? [] : teams,
+  progress: idle ? null : {
     activeTeamId: 'team-4', questionIndex: 1, lives: 2, passedCount: 1,
     phase: screen === 'station' ? 'choosingTrack' : 'awaitingAnswer', selectedChoiceId: null, runId: 1,
   },
-  results: screen === 'setup' ? [] : [
+  results: fresh ? [] : [
     { teamId: 'team-1', passedCount: 5, outcome: 'clear', completedAt: '' },
     { teamId: 'team-2', passedCount: 2, outcome: 'failed', completedAt: '' },
     { teamId: 'team-3', passedCount: 5, outcome: 'clear', completedAt: '' },
@@ -54,17 +57,15 @@ if (screen === 'long') {
 const ui: UiState = {
   started: screen !== 'start',
   hasSavedGame: params.has('saved'),
-  view: screen === 'setup' ? 'setup'
-    : screen === 'leaderboard' ? 'leaderboard'
-    : screen === 'admin' ? 'admin'
-    : screen === 'teams' ? 'teams' : 'question',
+  view: screen === 'setup' || screen === 'setup-new' ? 'setup'
+    : screen === 'home' || screen === 'pick' ? 'home' : 'question',
   adminMenuOpen: screen === 'menu',
-  volume: 0.8,
   notice: params.has('notice') ? '저장에 실패했습니다. 브라우저 저장 공간을 확인하세요.' : null,
-  issues: params.has('issues') ? [
-    { location: '팀 2', message: '팀 이름이 비어 있습니다.' },
-    { location: '팀 믿음팀', message: '같은 이름의 팀이 있습니다.' },
-  ] : [],
+  // ?issues 또는 ?issues=N (N건)
+  issues: params.has('issues')
+    ? Array.from({ length: Number(params.get('issues')) || 2 }, (_, i) =>
+        i % 2 ? { location: `말씀 ${i + 1}번`, message: '구절이 비어 있습니다.' } : { location: `팀 ${i + 1}번`, message: '팀 이름이 비어 있습니다.' })
+    : [],
   animationStuck: params.has('stuck'),
   isFullscreen: false,
   introPlaying: screen === 'intro',
@@ -77,8 +78,7 @@ const actions: UiActions = {
   start() { ui.started = true; update(); },
   setView(v) { ui.view = v; update(); },
   returnToChallenge() { ui.view = 'question'; update(); },
-  importContent(json) { log('importContent', json); },
-  registerTeams(d) { log('registerTeams', d); },
+  saveSetup(d) { log('saveSetup', d); ui.view = 'home'; update(); },
   startChallenge(id) { log('startChallenge', id); },
   selectTrack(setId) {
     log('selectTrack', setId);
@@ -106,10 +106,10 @@ const actions: UiActions = {
   closeAdminMenu() { ui.adminMenuOpen = false; update(); },
   undo() { log('undo'); },
   skipAnimation() { log('skip'); },
-  setVolume(v) { ui.volume = v; update(); },
   enterFullscreen() { void document.documentElement.requestFullscreen?.(); },
-  resetRecords() { log('resetRecords'); },
 };
 
 const handle = mountUi(document.getElementById('app')!, actions);
 update();
+// ?screen=pick: '게임 시작'을 누른 상태 (팀 목록 펼침)
+if (screen === 'pick') (document.querySelector('.home__actions .g-btn') as HTMLButtonElement | null)?.click();

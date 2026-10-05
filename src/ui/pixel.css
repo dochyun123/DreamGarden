@@ -99,6 +99,38 @@
   pointer-events: none; /* 그림 상자가 시작 버튼 아래쪽을 덮으므로 클릭을 통과시킨다 */
 }
 
+/* ───────── home: 시작 화면 장면 + 게임 시작 / 팀 고르기 ───────── */
+.home__actions { position: relative; display: flex; flex-direction: column; align-items: center; gap: 28px; }
+.home .g-btn { min-width: 420px; }
+.home__done { padding: 24px 56px; font-size: 48px; color: var(--c-text-dim); }
+/* 팀 고르기: 제목을 줄이고 팀 버튼을 4열로 */
+.home.is-picking .start__title { margin-bottom: 8px; }
+.home.is-picking .start__title-main { font-size: 56px; }
+.home.is-picking .start__title-accent { font-size: 96px; }
+.home__teams { display: grid; grid-template-columns: repeat(4, 360px); gap: 28px 32px; }
+.home .home__team { min-width: 0; min-height: 96px; padding: 0 24px; font-size: 44px; --px-bg: var(--c-sign); color: #fff; }
+.home .home__team:hover:not(:disabled) { --px-bg: var(--c-sign-light); }
+.home .home__team.is-done { --px-bg: #24223a; --px-light: transparent; color: #5d5a7a; cursor: not-allowed; transform: none; }
+.home .home__back { min-width: 0; min-height: 72px; padding: 0 40px; font-size: 32px; --px-bg: var(--c-surface); color: var(--c-text); }
+.home.is-picking .start__train { display: none; } /* 팀 버튼·뒤로 버튼과 겹치지 않게 */
+.home__teams.is-wide { grid-template-columns: repeat(5, 300px); } /* 9팀 이상: 5열 */
+/* 구석의 작은 ⚙ 관리 */
+.home__manage {
+  position: absolute;
+  left: 24px; bottom: 20px;
+  z-index: 2;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 8px 14px;
+  border: 0; background: transparent;
+  color: var(--c-text-faint);
+  font-family: var(--font-pixel);
+  font-size: 24px;
+  opacity: 0.7;
+  cursor: pointer;
+}
+.home__manage svg { width: 28px; height: 28px; }
+.home__manage:hover { opacity: 1; color: var(--c-text); background: var(--c-surface); }
+
 /* ───────── 기차역 (갈림길 고르기) ───────── */
 .station {
   padding: 56px var(--gutter) 200px;

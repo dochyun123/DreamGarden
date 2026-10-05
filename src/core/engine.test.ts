@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import sample from '../../data/sample-content.json';
 import type { ContentFile, GameState } from '../types';
 import {
-  availableSetIds, completeAnimation, createInitialState, getCurrentQuestion, lastUndoLabel, registerTeams,
+  availableSetIds, completeAnimation, createInitialState, saveSetup, getCurrentQuestion, lastUndoLabel, registerTeams,
   replaceContent, resetRecords, resumeRun, selectChoice, selectTrack, startChallenge, undo,
 } from './engine';
 
@@ -350,5 +350,24 @@ describe('기획서 8장 검수 기준', () => {
     expect(r.questionSets).toEqual(s.questionSets);
     // 초기화 후 팀 재구성 가능
     expect(registerTeams(r, [{ name: '새팀' }]).teams).toHaveLength(1);
+  });
+});
+
+describe('관리 화면 저장', () => {
+  it('기록 초기화 + 말씀 출처·구절 교체(문제 유지) + 팀 재등록', () => {
+    let s = begin(setup(), 'team-1');
+    for (let i = 0; i < 3; i++) s = answer(s, wrongId(s));
+    s = begin(s, 'team-2');
+    const scriptures = s.questionSets.map((_, i) => ({ scriptureReference: ` 출처${i + 1} `, scriptureText: `구절${i + 1}` }));
+    const r = saveSetup(s, { teamNames: ['가', '나'], scriptures });
+    expect(r.progress).toBeNull();
+    expect(r.results).toEqual([]);
+    expect(r.undoHistory).toEqual([]);
+    expect(r.teams).toEqual([
+      { id: 'team-1', name: '가', questionSetId: null, status: 'notStarted' },
+      { id: 'team-2', name: '나', questionSetId: null, status: 'notStarted' },
+    ]);
+    expect(r.questionSets[0]).toMatchObject({ scriptureReference: '출처1', scriptureText: '구절1' });
+    expect(r.questionSets[0].questions).toEqual(s.questionSets[0].questions);
   });
 });

@@ -48,6 +48,29 @@ export function registerTeams(state: GameState, drafts: TeamDraft[]): GameState 
   return { ...state, teams, undoHistory: [] };
 }
 
+export interface ScriptureDraft {
+  scriptureReference: string;
+  scriptureText: string;
+}
+
+/** 관리 화면 저장 내용: 팀 이름들 + 갈림길(세트) 순서대로 말씀 출처·구절. 문제는 기존 세트의 것을 그대로 쓴다 */
+export interface SetupDraft {
+  teamNames: string[];
+  scriptures: ScriptureDraft[];
+}
+
+/**
+ * 관리 화면 저장. 기록을 먼저 초기화(진행·결과·Undo 제거)한 뒤
+ * 세트 i의 말씀 출처·구절을 scriptures[i]로 바꾸고 팀을 다시 등록한다. 검증은 validateSetup이 먼저 한다.
+ */
+export function saveSetup(state: GameState, draft: SetupDraft): GameState {
+  const questionSets = state.questionSets.map((set, i) => {
+    const d = draft.scriptures[i];
+    return d ? { ...set, scriptureReference: d.scriptureReference.trim(), scriptureText: d.scriptureText.trim() } : set;
+  });
+  return registerTeams({ ...resetRecords(state), questionSets }, draft.teamNames.map((name) => ({ name })));
+}
+
 /** 미도전 팀 도전 시작. 다른 팀이 진행 중이면 거부. 시작 전 스냅샷을 undo에 쌓는다. lives=3, passed=0, phase=choosingTrack(기차역), runId+1 */
 export function startChallenge(state: GameState, teamId: string): GameState {
   if (state.progress) return state;

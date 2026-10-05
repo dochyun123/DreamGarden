@@ -1,11 +1,11 @@
-// 담당: dream-f4 — 시작 화면. 버튼 클릭 = 전체화면 + 오디오 활성화 (actions.start)
+// 담당: dream-2a — 시작 화면. 버튼 클릭 = 전체화면 + 오디오 활성화 (actions.start). 밤하늘·제목·지하철 장면은 home과 같이 쓴다
 import type { Ctx, Screen } from '../context';
 import { h } from '../dom';
 
 const NS = 'http://www.w3.org/2000/svg';
 
 /** 픽셀 지하철 (옆모습, 1칸 = 1 viewBox 단위). 창문에 불이 켜진 객차 2량 + 선로 */
-function pixelTrain(): SVGSVGElement {
+export function pixelTrain(): SVGSVGElement {
   const r = (x: number, y: number, w: number, hh: number, fill: string) =>
     `<rect x="${x}" y="${y}" width="${w}" height="${hh}" fill="${fill}"/>`;
   let out = '';
@@ -33,21 +33,24 @@ function pixelTrain(): SVGSVGElement {
   return el;
 }
 
+/** 별 + 제목 (시작 화면·home 공용). 지하철 그림은 맨 뒤에 따로 붙인다 */
+export function titleScene(): HTMLElement[] {
+  return [
+    h('div', { class: 'start__stars', attrs: { 'aria-hidden': 'true' } }),
+    h('h1', { class: 'start__title' },
+      h('span', { class: 'start__title-main' }, '드리가든이 가을을 보내는 법'),
+      h('span', { class: 'start__title-accent' }, '암송'),
+    ),
+  ];
+}
+
 export function createStartScreen(ctx: Ctx): Screen {
   const button = h('button', {
     class: 'g-btn g-btn--lamp',
     attrs: { type: 'button' },
     on: { click: () => ctx.actions.start() },
   });
-  const el = h('section', { class: 'screen start' },
-    h('div', { class: 'start__stars', attrs: { 'aria-hidden': 'true' } }),
-    h('h1', { class: 'start__title' },
-      h('span', { class: 'start__title-main' }, '드리가든이 가을을 보내는 법'),
-      h('span', { class: 'start__title-accent' }, '암송'),
-    ),
-    button,
-    pixelTrain(),
-  );
+  const el = h('section', { class: 'screen start' }, ...titleScene(), button, pixelTrain());
   return {
     el,
     update(_state, ui) {

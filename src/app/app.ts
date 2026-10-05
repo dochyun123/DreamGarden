@@ -1,12 +1,14 @@
 // 담당: dream-3c (리드) — 모듈 연결, UiState 관리, 연출 재생 루프, 저장 호출.
 import sampleContent from '../../data/sample-content.json';
 import { createAnimationPlayer } from '../animation/player';
-import { parseContentCsv } from '../content/csv';
-import { parseContentFile, validateTeamDrafts } from '../content/validator';
+import { validateSetup } from '../content/validator';
 import * as engine from '../core/engine';
 import { createGameStorage, type GameStorage } from '../storage/storage';
 import type { AnimationKind, ContentFile, GameState } from '../types';
 import { mountUi, type UiActions, type UiState } from '../ui/ui';
+
+/** 음량 조절은 없앴다 — 고정 */
+const VOLUME = 0.8;
 
 /** 연출이 이 시간보다 길어지면 관리자에게 '연출 건너뛰기'를 강조한다 */
 const ANIMATION_WATCHDOG_MS = 12_000;
@@ -19,9 +21,8 @@ export function bootstrap(root: HTMLElement): void {
   const ui: UiState = {
     started: false,
     hasSavedGame: state.progress !== null,
-    view: state.teams.length > 0 ? 'teams' : 'setup',
+    view: state.teams.length > 0 ? 'home' : 'setup',
     adminMenuOpen: false,
-    volume: 0.8,
     notice: loaded.notice,
     issues: [],
     animationStuck: false,
@@ -63,24 +64,16 @@ export function bootstrap(root: HTMLElement): void {
       if (state.progress) ui.view = 'question';
       update();
     },
-    importContent(json) {
-      // UI는 .csv 파일을 텍스트 그대로, .json 파일은 파싱한 객체로 넘긴다
-      const { content, issues } = typeof json === 'string' ? parseContentCsv(json) : parseContentFile(json);
-      ui.issues = issues;
-      if (content) {
-        const next = engine.replaceContent(state, content);
-        if (next === state) ui.notice = '진행 중이거나 기록이 있으면 문제 데이터를 바꿀 수 없습니다. 기록 초기화 후 다시 시도하세요.';
-        else commit(next);
-      }
-      update();
-    },
-    registerTeams(drafts) {
-      const issues = validateTeamDrafts(drafts, contentOf(state));
+    saveSetup(draft) {
+      const issues = validateSetup(draft, contentOf(state));
       ui.issues = issues;
       if (issues.length === 0) {
-        const next = engine.registerTeams(state, drafts);
-        if (next === state) ui.notice = '진행 중이거나 기록이 있으면 팀 구성을 바꿀 수 없습니다.';
-        else if (commit(next)) ui.view = 'teams';
+        cancelAnimation();
+        ui.introPlaying = false;
+        if (commit(engine.saveSetup(state, draft))) {
+          introShown = false; // 기록이 새로 시작되므로 첫 도전에서 인트로를 다시 보여준다
+          ui.view = 'home';
+        }
       }
       update();
     },
@@ -124,33 +117,21 @@ export function bootstrap(root: HTMLElement): void {
         // 첫 도전 시작을 취소했다면(아직 아무 기록도 없음) 다음 시작 때 인트로를 다시 보여준다
         if (!state.progress && state.results.length === 0) introShown = false;
         if (state.progress) ui.view = 'question';
-        else if (ui.view === 'question') ui.view = 'teams';
+        else if (ui.view === 'question') ui.view = 'home';
       }
       update();
     },
     skipAnimation() {
       player.skip();
     },
-    setVolume(volume) {
-      ui.volume = Math.min(1, Math.max(0, volume));
-      player.setVolume(ui.volume);
-      update();
-    },
     enterFullscreen() {
       enterFullscreen();
-    },
-    resetRecords() {
-      cancelAnimation();
-      ui.introPlaying = false;
-      introShown = false;
-      if (commit(engine.resetRecords(state))) ui.view = 'teams';
-      update();
     },
   };
 
   const handle = mountUi(root, actions);
   const player = createAnimationPlayer(handle.animationHost);
-  player.setVolume(ui.volume);
+  player.setVolume(VOLUME);
 
   document.addEventListener('fullscreenchange', () => {
     ui.isFullscreen = document.fullscreenElement !== null;
@@ -184,7 +165,7 @@ export function bootstrap(root: HTMLElement): void {
   }
 
   function update(): void {
-    if (!state.progress && ui.view === 'question') ui.view = 'teams';
+    if (!state.progress && ui.view === 'question') ui.view = 'home';
     handle.render(state, ui);
     syncAnimation();
   }

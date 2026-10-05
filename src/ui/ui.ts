@@ -1,24 +1,25 @@
-// 담당: dream-f4 — 시작, 초기 설정, 팀 선택, 문제, 리더보드, 관리 화면.
+// 담당: dream-2a — 시작, home(게임 시작·팀 고르기), 관리(setup), 기차역, 문제 화면.
 // UI는 상태를 직접 바꾸지 않는다. render()로 받은 상태를 그리고, 사용자 행동은 actions 호출로만 전달한다.
 import type { GameState, ValidationIssue } from '../types';
-import { lastUndoLabel, type TeamDraft } from '../core/engine';
+import { lastUndoLabel, type SetupDraft } from '../core/engine';
 import './fonts.css';
 import './tokens.css';
 import './ui.css';
 import './pixel.css';
 import type { Ctx, LocalUi, Screen } from './context';
 import { h } from './dom';
-import { brand } from './brand';
 import { undoIcon } from './icons';
 import { createStartScreen } from './screens/start';
 import { createSetupScreen } from './screens/setup';
 import { createQuestionScreen } from './screens/question';
 import { createStationScreen } from './screens/station';
-import { createTeamsBody } from './screens/teams';
-import { createLeaderboardBody } from './screens/leaderboard';
-import { createAdminBody, createAdminMenu, createConfirmModal } from './screens/admin';
+import { createHomeScreen } from './screens/home';
+import { createAdminMenu, createConfirmModal } from './screens/admin';
 
-export type View = 'setup' | 'teams' | 'question' | 'leaderboard' | 'admin';
+/**
+ * setup: 관리(팀 수·팀 이름·말씀 10개 출처와 구절). home: 게임 시작 화면(→ 미도전 팀 고르기). question: 기차역·문제
+ */
+export type View = 'setup' | 'home' | 'question';
 
 /** 영속되지 않는 화면 상태 (app이 소유) */
 export interface UiState {
@@ -29,10 +30,9 @@ export interface UiState {
   view: View;
   /** 문제 화면 왼쪽 아래 관리 아이콘으로 연 메뉴. 열려 있으면 입력·연출 일시정지 */
   adminMenuOpen: boolean;
-  volume: number; // 0~1
   /** 저장 실패 등 관리자 알림 */
   notice: string | null;
-  /** 최근 검증 오류 (문제 가져오기·팀 등록) */
+  /** 최근 검증 오류 (관리 화면 저장) */
   issues: ValidationIssue[];
   /** 연출 재생 오류로 대체 자막 중 → 관리자에게 '연출 건너뛰기' 노출 */
   animationStuck: boolean;
@@ -45,8 +45,8 @@ export interface UiActions {
   start(): void; // 클릭 핸들러 안에서 호출됨 → 전체화면+오디오
   setView(view: Exclude<View, 'question'>): void;
   returnToChallenge(): void; // 진행 중 도전 화면으로
-  importContent(json: unknown): void;
-  registerTeams(drafts: TeamDraft[]): void;
+  /** 관리 화면 저장. 검증 통과 시 기록 초기화 + 팀·말씀 반영 후 home. 기록이 있으면 UI가 먼저 확인 모달을 띄운다 */
+  saveSetup(draft: SetupDraft): void;
   startChallenge(teamId: string): void; // → progress.phase = 'choosingTrack' (기차역)
   selectTrack(questionSetId: string): void; // 기차역에서 말씀 선택 → 문제 시작
   selectChoice(choiceId: string): void;
@@ -54,9 +54,7 @@ export interface UiActions {
   closeAdminMenu(): void;
   undo(): void;
   skipAnimation(): void;
-  setVolume(volume: number): void;
   enterFullscreen(): void;
-  resetRecords(): void; // UI가 확인 다이얼로그를 먼저 띄운 뒤 호출 (window.confirm 금지, 자체 모달)
 }
 
 export interface UiHandle {
@@ -68,92 +66,13 @@ export interface UiHandle {
 const STAGE_W = 1920;
 const STAGE_H = 1080;
 
-type ScreenKey = 'start' | 'setup' | 'station' | 'question' | 'tabs';
-type TabView = 'teams' | 'leaderboard' | 'admin';
+type ScreenKey = 'start' | 'setup' | 'home' | 'station' | 'question';
 
 function screenKeyFor(state: GameState, ui: UiState): ScreenKey {
   if (!ui.started) return 'start';
   if (ui.view === 'setup') return 'setup';
   if (ui.view === 'question' && state.progress) return state.progress.phase === 'choosingTrack' ? 'station' : 'question';
-  return 'tabs';
-}
-
-/** 상단 탭(팀 선택/리더보드/관리) + 본문 */
-function createTabsScreen(ctx: Ctx): Screen {
-  const bodies: Record<TabView, Screen> = {
-    teams: createTeamsBody(ctx),
-    leaderboard: createLeaderboardBody(),
-    admin: createAdminBody(ctx),
-  };
-  const labels: Record<TabView, string> = { teams: '팀 선택', leaderboard: '리더보드', admin: '관리' };
-  let shown: TabView | null = null;
-
-  const tabButtons = (Object.keys(labels) as TabView[]).map((v) =>
-    h('button', {
-      class: 'tab',
-      data: { view: v },
-      attrs: { type: 'button', role: 'tab' },
-      on: {
-        click: () => {
-          if (v === 'admin') ctx.local.adminSub = 'main';
-          ctx.actions.setView(v);
-        },
-      },
-    }, labels[v]),
-  );
-  const right = h('div', { class: 'topbar__right' });
-  const slot = h('div', { class: 'tab-body' });
-  slot.style.cssText = 'flex:1;min-height:0;display:flex;flex-direction:column;';
-  const el = h('section', { class: 'screen' },
-    h('header', { class: 'topbar' },
-      brand(),
-      h('nav', { class: 'tabs', attrs: { role: 'tablist' } }, tabButtons),
-      right,
-    ),
-    slot,
-  );
-
-  return {
-    el,
-    update(state, ui) {
-      const view: TabView = ui.view === 'leaderboard' || ui.view === 'admin' ? ui.view : 'teams';
-      for (const b of tabButtons) {
-        const active = b.dataset.view === view;
-        b.classList.toggle('is-active', active);
-        b.setAttribute('aria-selected', String(active));
-        b.querySelector('.badge-dot')?.remove();
-        if (b.dataset.view === 'admin' && (ui.notice || ui.animationStuck)) b.append(h('span', { class: 'badge-dot' }));
-      }
-
-      const p = state.progress;
-      const team = p && state.teams.find((t) => t.id === p.activeTeamId);
-      right.replaceChildren(
-        p
-          ? h('div', { class: 'resume-banner' },
-              h('span', { class: 'live-dot' }),
-              `${team?.name ?? ''} 도전 중`,
-              h('button', {
-                class: 'btn btn--small btn--primary',
-                attrs: { type: 'button' },
-                on: { click: () => ctx.actions.returnToChallenge() },
-              }, '도전으로 돌아가기'),
-            )
-          : '',
-      );
-
-      const body = bodies[view];
-      if (shown !== view) {
-        // 관리 화면을 새로 열 때마다 진행 팀 정답 공개 확인을 다시 받는다
-        if (view === 'admin') ctx.local.revealedSetId = null;
-        shown = view;
-        body.el.classList.remove('screen-enter');
-        slot.replaceChildren(body.el);
-        void body.el.offsetWidth;
-        body.el.classList.add('screen-enter');
-      }
-      body.update(state, ui);
-    },
-  };
+  return 'home';
 }
 
 export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
@@ -189,15 +108,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
   let menu: Screen | null = null;
   let confirmModal: { key: string; el: HTMLElement } | null = null;
 
-  const local: LocalUi = {
-    teamsPage: 0,
-    adminSub: 'main',
-    reviewSetId: null,
-    confirm: null,
-    revealedSetId: null,
-    lock: null,
-    setup: null,
-  };
+  const local: LocalUi = { confirm: null, lock: null, setup: null, pickingTeam: false };
   const ctx: Ctx = { actions, local, rerender: () => { if (last) render(last.state, last.ui); } };
 
   const factories: Record<ScreenKey, () => Screen> = {
@@ -205,7 +116,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     setup: () => { local.setup = null; return createSetupScreen(ctx); },
     station: () => createStationScreen(ctx),
     question: () => createQuestionScreen(ctx),
-    tabs: () => createTabsScreen(ctx),
+    home: () => createHomeScreen(ctx),
   };
 
   document.addEventListener('keydown', (e) => {
@@ -235,7 +146,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     }
 
     const confirm = ui.started ? local.confirm : null;
-    const confirmKey = confirm ? JSON.stringify(confirm) : '';
+    const confirmKey = confirm ? confirm.kind : '';
     if (confirmModal && confirmModal.key !== confirmKey) { confirmModal.el.remove(); confirmModal = null; }
     if (confirm && !confirmModal) {
       confirmModal = { key: confirmKey, el: createConfirmModal(ctx, confirm) };
@@ -250,7 +161,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     stage.classList.toggle('is-paused', ui.adminMenuOpen);
     // 꿈 인트로: 연출 오버레이만 보이고 아래 화면은 감춘다 (차분한 배경만)
     stage.classList.toggle('is-intro', ui.started && ui.introPlaying);
-    stage.dataset.view = key === 'tabs' ? ui.view : key;
+    stage.dataset.view = key;
   }
 
   return { render, animationHost };

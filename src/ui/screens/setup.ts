@@ -1,206 +1,153 @@
-// 담당: dream-f4 — 초기 설정: 문제 JSON/CSV 가져오기 → 팀 수(기본 8) → 팀명 → 등록
-// 말씀(세트)은 팀이 기차역 갈림길에서 직접 고르므로 여기서 연결하지 않는다.
+// 담당: dream-2a — 관리 화면: 팀 수(±) · 팀 이름 · 말씀 10개(출처 한 줄 + 구절 여러 줄) → 저장 하나.
+// 기존 값으로 미리 채운다. 기록(진행·결과)이 있으면 확인 모달을 거쳐 saveSetup을 부른다 (app이 기록 초기화 후 home으로).
 import type { GameState } from '../../types';
-import { TRACK_COUNT } from '../../types';
-import type { UiState } from '../ui';
-import type { Ctx, Screen, SetupRowDraft } from '../context';
-import { MAX_TEAMS } from '../context';
+import type { Ctx, Screen, SetupForm } from '../context';
 import { h } from '../dom';
-import { brand } from '../brand';
-import { editLockReason } from './admin';
 
 const DEFAULT_TEAM_COUNT = 8;
+/** 오류 상자는 처음 몇 건만 — 많아도 말씀 목록을 가리지 않게 */
+const MAX_ISSUES = 3;
 
-function initialDraft(state: GameState): NonNullable<Ctx['local']['setup']> {
-  if (state.teams.length > 0) {
-    return {
-      count: state.teams.length,
-      rows: state.teams.map((t) => ({ name: t.name })),
-      parseError: null,
-    };
-  }
-  return { count: DEFAULT_TEAM_COUNT, rows: [], parseError: null };
+function formFrom(state: GameState): SetupForm {
+  return {
+    teamNames: state.teams.length
+      ? state.teams.map((t) => t.name)
+      : Array.from({ length: Math.min(DEFAULT_TEAM_COUNT, maxTeams(state)) }, () => ''),
+    scriptures: state.questionSets.map((s) => ({ scriptureReference: s.scriptureReference, scriptureText: s.scriptureText })),
+  };
 }
 
-/** 빈 행 채우기 */
-function normalizeRows(rows: SetupRowDraft[], count: number): void {
-  while (rows.length < count) rows.push({ name: '' });
+/** 팀 수 상한 = 말씀(갈림길) 수. 팀이 더 많으면 저장 검증에서 거부된다 */
+function maxTeams(state: GameState): number {
+  return Math.max(1, state.questionSets.length);
 }
 
-/** UTF-8 우선, 실패하면 CP949(엑셀 기본 'CSV' 저장)로 다시 읽는다 */
-function decodeText(buf: ArrayBuffer): string {
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
-  } catch {
-    return new TextDecoder('euc-kr').decode(buf);
-  }
+function hasRecords(state: GameState): boolean {
+  return !!state.progress || state.results.length > 0;
 }
 
 export function createSetupScreen(ctx: Ctx): Screen {
   let state: GameState | null = null;
-  let ui: UiState | null = null;
-  let rowsKey = '';
+  let teamsKey = '';
+  let scripturesKey = '';
 
-  const fileInput = h('input', {
-    class: 'sr-only',
-    attrs: { type: 'file', accept: '.json,.csv,application/json,text/csv', tabindex: -1 },
-    on: { change: () => void importFile() },
-  });
-  const contentInfo = h('div', { class: 'content-info' });
-  const importBtn = h('button', {
-    class: 'btn btn--block btn--stacked',
-    attrs: { type: 'button' },
-    on: { click: () => fileInput.click() },
-  },
-    h('span', { class: 'btn__label' }, '📂 문제 파일 가져오기'),
-    h('span', { class: 'btn__sub' }, 'JSON · CSV'),
-  );
   const countValue = h('div', { class: 'stepper__value', attrs: { 'aria-live': 'polite' } });
   const minus = h('button', { class: 'btn', attrs: { type: 'button', 'aria-label': '팀 수 줄이기' }, on: { click: () => setCount(-1) } }, '−');
   const plus = h('button', { class: 'btn', attrs: { type: 'button', 'aria-label': '팀 수 늘리기' }, on: { click: () => setCount(1) } }, '+');
-  const lockNote = h('div', { class: 'lock-note' });
+  const teamRows = h('div', { class: 'team-rows' });
+  const scriptureRows = h('div', { class: 'scripture-rows' });
   const issues = h('div');
-  const rows = h('div', { class: 'team-rows' });
-  const submit = h('button', {
-    class: 'btn btn--primary btn--large',
-    attrs: { type: 'button' },
-    on: { click: () => register() },
-  }, '등록 완료');
-  const cancel = h('button', {
-    class: 'btn',
-    attrs: { type: 'button' },
-    on: { click: () => ctx.actions.setView(state?.teams.length ? 'teams' : 'admin') },
-  }, '취소');
+  const save = h('button', { class: 'btn btn--primary btn--large', attrs: { type: 'button' }, on: { click: () => onSave() } }, '저장');
+  const cancel = h('button', { class: 'btn', attrs: { type: 'button' }, on: { click: () => ctx.actions.setView('home') } }, '취소');
 
   const el = h('section', { class: 'screen' },
     h('header', { class: 'topbar' },
-      brand(),
-      h('h1', { class: 'page__title' }, '초기 설정'),
+      h('div'),
+      h('h1', { class: 'page__title' }, '관리'),
       h('div', { class: 'topbar__right' }, cancel),
     ),
     h('div', { class: 'page' },
       h('div', { class: 'setup' },
         h('div', { class: 'setup__side' },
           h('section', { class: 'panel' },
-            h('h3', { class: 'panel__title' }, '1. 문제 데이터'),
-            contentInfo,
-            h('div', { class: 'panel__row' }, importBtn, fileInput),
-            h('p', { class: 'panel__desc' },
-              h('a', { class: 'link', attrs: { href: './content-template.csv', download: true } }, 'CSV 템플릿 받기')),
-          ),
-          h('section', { class: 'panel' },
-            h('h3', { class: 'panel__title' }, '2. 팀 수'),
+            h('h3', { class: 'panel__title' }, '팀 수'),
             h('div', { class: 'stepper' }, minus, countValue, plus),
           ),
-          lockNote,
-          issues,
-          h('div', { class: 'setup__actions' }, submit),
+          h('section', { class: 'panel setup__teams' },
+            h('h3', { class: 'panel__title' }, '팀 이름'),
+            teamRows,
+          ),
         ),
         h('div', { class: 'setup__main' },
-          h('div', { class: 'page__head' }, h('h3', { class: 'panel__title' }, '3. 팀 이름')),
-          rows,
+          h('h3', { class: 'panel__title' }, '말씀'),
+          scriptureRows,
+          issues,
+          h('div', { class: 'setup__actions' }, save),
         ),
       ),
     ),
   );
 
-  function draft() {
-    if (!ctx.local.setup) ctx.local.setup = initialDraft(state!);
+  function form(): SetupForm {
+    if (!ctx.local.setup) ctx.local.setup = formFrom(state!);
     return ctx.local.setup;
   }
 
   function setCount(d: number): void {
-    const dr = draft();
-    dr.count = Math.min(MAX_TEAMS, Math.max(1, dr.count + d));
+    const names = form().teamNames;
+    const next = Math.min(maxTeams(state!), Math.max(1, names.length + d));
+    while (names.length < next) names.push('');
+    names.length = next;
     ctx.rerender();
   }
 
-  async function importFile(): Promise<void> {
-    const file = fileInput.files?.[0];
-    fileInput.value = '';
-    if (!file) return;
-    const dr = draft();
-    const text = decodeText(await file.arrayBuffer());
-    if (/\.csv$/i.test(file.name)) {
-      // CSV는 문자열 그대로 넘기고 해석은 app이 한다
-      dr.parseError = null;
-      ctx.actions.importContent(text);
+  function onSave(): void {
+    const f = form();
+    const draft = { teamNames: f.teamNames.map((n) => n.trim()), scriptures: f.scriptures.map((s) => ({ ...s })) };
+    const go = () => ctx.actions.saveSetup(draft);
+    if (state && hasRecords(state)) {
+      ctx.local.confirm = { kind: 'save', onOk: go };
       ctx.rerender();
-      return;
+    } else {
+      go();
     }
-    let json: unknown;
-    try {
-      json = JSON.parse(text);
-    } catch (e) {
-      dr.parseError = `${file.name}: JSON 형식이 아닙니다 (${e instanceof Error ? e.message : String(e)})`;
-      ctx.rerender();
-      return;
-    }
-    dr.parseError = null;
-    ctx.actions.importContent(json);
-    ctx.rerender();
   }
 
-  function register(): void {
-    const dr = draft();
-    ctx.actions.registerTeams(
-      dr.rows.slice(0, dr.count).map((r) => ({ name: r.name.trim() })),
-    );
+  function buildTeams(): void {
+    const names = form().teamNames;
+    teamRows.replaceChildren(...names.map((name, i) => {
+      const input = h('input', {
+        class: 'field',
+        attrs: { type: 'text', value: name, placeholder: `팀 ${i + 1}`, maxlength: 20, 'aria-label': `팀 ${i + 1} 이름` },
+        on: { input: () => { names[i] = input.value; } },
+      });
+      return h('div', { class: 'team-row' }, h('div', { class: 'team-row__num' }, i + 1), input);
+    }));
   }
 
-  function buildRows(locked: boolean): void {
-    const dr = draft();
-    rows.replaceChildren(
-      ...dr.rows.slice(0, dr.count).map((r, i) => {
-        const nameInput = h('input', {
-          class: 'field',
-          attrs: { type: 'text', value: r.name, placeholder: `팀 ${i + 1} 이름`, maxlength: 20, disabled: locked, 'aria-label': `팀 ${i + 1} 이름` },
-          on: { input: () => { r.name = nameInput.value; } },
-        });
-        return h('div', { class: 'team-row' }, h('div', { class: 'team-row__num' }, i + 1), nameInput);
-      }),
-    );
+  function buildScriptures(): void {
+    const list = form().scriptures;
+    scriptureRows.replaceChildren(...list.map((s, i) => {
+      const ref = h('input', {
+        class: 'field',
+        attrs: { type: 'text', value: s.scriptureReference, placeholder: '출처 (예: 시편 23:1)', maxlength: 40, 'aria-label': `말씀 ${i + 1} 출처` },
+        on: { input: () => { s.scriptureReference = ref.value; } },
+      });
+      const text = h('textarea', {
+        class: 'field field--area',
+        attrs: { rows: 2, placeholder: '구절', 'aria-label': `말씀 ${i + 1} 구절` },
+        on: { input: () => { s.scriptureText = text.value; } },
+      });
+      text.value = s.scriptureText;
+      return h('div', { class: 'scripture-row' }, h('div', { class: 'team-row__num' }, i + 1), ref, text);
+    }));
   }
 
   return {
     el,
-    update(s, u) {
+    update(s, ui) {
       state = s;
-      ui = u;
-      const dr = draft();
-      const sets = s.questionSets;
-      const lock = editLockReason(s);
-      const locked = !!lock;
-      normalizeRows(dr.rows, dr.count);
-
-      contentInfo.replaceChildren(
-        h('b', null, sets.length ? `말씀 ${sets.length} / ${TRACK_COUNT}개 불러옴` : '불러온 문제가 없습니다'),
-        sets.length > 0 && sets.length !== TRACK_COUNT ? `기차역 갈림길은 ${TRACK_COUNT}개입니다` : '',
-      );
-      importBtn.disabled = locked;
-      minus.disabled = locked || dr.count <= 1;
-      plus.disabled = locked || dr.count >= MAX_TEAMS;
-      countValue.textContent = String(dr.count);
-      lockNote.replaceChildren(lock ? `🔒 ${lock}` : '');
+      const f = form();
+      const n = f.teamNames.length;
+      countValue.textContent = String(n);
+      minus.disabled = n <= 1;
+      plus.disabled = n >= maxTeams(s);
       cancel.hidden = s.teams.length === 0;
-      submit.disabled = locked || sets.length === 0;
 
       // 입력 중 포커스를 잃지 않도록 행 구성이 바뀔 때만 다시 만든다
-      const key = `${dr.count}|${locked}`;
-      if (key !== rowsKey) {
-        rowsKey = key;
-        buildRows(locked);
-      }
+      if (String(n) !== teamsKey) { teamsKey = String(n); buildTeams(); }
+      const sk = String(f.scriptures.length);
+      if (sk !== scripturesKey) { scripturesKey = sk; buildScriptures(); }
 
-      const all = [
-        ...(dr.parseError ? [{ location: '파일', message: dr.parseError }] : []),
-        ...(ui?.issues ?? []),
-      ];
+      const list = ui.issues;
       issues.replaceChildren(
-        all.length
+        list.length
           ? h('div', { class: 'issues', attrs: { role: 'alert' } },
-              h('p', { class: 'issues__title' }, `확인할 문제 ${all.length}건`),
-              h('ul', null, all.map((x) => h('li', null, h('b', null, x.location), x.message))),
+              h('p', { class: 'issues__title' }, `확인할 것 ${list.length}건`),
+              h('ul', null,
+                list.slice(0, MAX_ISSUES).map((x) => h('li', null, h('b', null, x.location), x.message)),
+                list.length > MAX_ISSUES ? h('li', { class: 'issues__more' }, `외 ${list.length - MAX_ISSUES}건`) : null,
+              ),
             )
           : '',
       );

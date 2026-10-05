@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import sample from '../../data/sample-content.json';
 import type { ContentFile } from '../types';
-import { parseContentFile, validateTeamDrafts } from './validator';
+import { parseContentFile, validateSetup, validateTeamDrafts } from './validator';
 
 const content = sample as ContentFile;
 const copy = (): any => JSON.parse(JSON.stringify(sample));
@@ -112,5 +112,25 @@ describe('validateTeamDrafts', () => {
 
   it('팀이 없으면 오류', () => {
     expect(validateTeamDrafts([], content)).toHaveLength(1);
+  });
+});
+
+describe('validateSetup', () => {
+  const scriptures = content.questionSets.map((s) => ({ scriptureReference: s.scriptureReference, scriptureText: s.scriptureText }));
+
+  it('정상 저장은 오류 없음', () => {
+    expect(validateSetup({ teamNames: ['믿음팀'], scriptures }, content)).toEqual([]);
+  });
+
+  it('팀 이름 오류 + 빈 출처·구절 + 말씀 개수', () => {
+    const bad = scriptures.map((s, i) => (i === 2 ? { scriptureReference: ' ', scriptureText: '' } : s));
+    expect(validateSetup({ teamNames: [' '], scriptures: bad }, content)).toEqual([
+      { location: '팀 1번', message: expect.stringContaining('비어') },
+      { location: '말씀 3번', message: expect.stringContaining('출처') },
+      { location: '말씀 3번', message: expect.stringContaining('구절') },
+    ]);
+    expect(validateSetup({ teamNames: ['a'], scriptures: scriptures.slice(1) }, content)).toEqual([
+      { location: '말씀', message: expect.stringContaining('개') },
+    ]);
   });
 });

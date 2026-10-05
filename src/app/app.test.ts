@@ -99,13 +99,18 @@ function boot(): void {
   bootstrap(document.createElement('div'));
 }
 
+/** 관리 화면 저장: 팀 이름 + 지금 말씀 그대로 */
+function setupTeams(names: string[]): void {
+  actions().saveSetup({
+    teamNames: names,
+    scriptures: state().questionSets.map((s) => ({ scriptureReference: s.scriptureReference, scriptureText: s.scriptureText })),
+  });
+}
+
 /** 팀 2개 등록 → 시작 버튼 → team-1 도전 시작 → 꿈 인트로 끝 → 기차역에서 set-1 선택. 인트로 재생 기록은 지운다 */
 async function bootAndStart(): Promise<void> {
   boot();
-  actions().registerTeams([
-    { name: '믿음팀' },
-    { name: '소망팀' },
-  ]);
+  setupTeams(['믿음팀', '소망팀']);
   actions().start();
   actions().startChallenge('team-1');
   expect(lastPlay().kind).toBe('intro');
@@ -127,14 +132,22 @@ afterEach(() => {
 // ───────── 흐름 ─────────
 
 describe('app 통합', () => {
-  it('처음 실행: 저장이 없으면 setup 화면, 팀 등록 후 teams', async () => {
+  it('처음 실행: 저장이 없으면 setup 화면, 관리 저장 후 home', async () => {
     boot();
     expect(ui()).toMatchObject({ view: 'setup', started: false, hasSavedGame: false, notice: null });
-    actions().registerTeams([{ name: ' ' }]);
+    setupTeams([' ']);
     expect(ui().issues).toHaveLength(1);
     expect(state().teams).toEqual([]);
-    actions().registerTeams([{ name: '믿음팀' }]);
-    expect(ui()).toMatchObject({ view: 'teams', issues: [] });
+    actions().saveSetup({ teamNames: ['믿음팀'], scriptures: state().questionSets.map(() => ({ scriptureReference: '요한복음 3:16', scriptureText: ' ' })) });
+    expect(ui().issues).toHaveLength(state().questionSets.length); // 구절 빈칸
+    actions().saveSetup({
+      teamNames: ['믿음팀'],
+      scriptures: state().questionSets.map((_, i) => ({ scriptureReference: ` 출처${i + 1} `, scriptureText: `구절${i + 1}` })),
+    });
+    expect(ui()).toMatchObject({ view: 'home', issues: [] });
+    expect(state().teams.map((t) => t.name)).toEqual(['믿음팀']);
+    expect(state().questionSets[2]).toMatchObject({ scriptureReference: '출처3', scriptureText: '구절3' });
+    expect(state().questionSets[2].questions).toHaveLength(5); // 문제는 그대로
   });
 
   it('① 시작 → 도전 시작 → 정답 → play(correct) → ended → 다음 문제 대기', async () => {
@@ -224,13 +237,13 @@ describe('app 통합', () => {
 
     expect(fake.plays.map((p) => p.kind)).toEqual(['wrong', 'wrong', 'wrong', 'inferno']);
     expect(state().progress).toBeNull();
-    expect(ui().view).toBe('teams');
+    expect(ui().view).toBe('home');
     expect(state().results).toEqual([expect.objectContaining({ teamId: 'team-1', passedCount: 0, outcome: 'failed' })]);
     expect(state().teams[0].status).toBe('completed');
 
     actions().startChallenge('team-1'); // 완료 팀 재도전 불가
     expect(state().progress).toBeNull();
-    expect(ui().view).toBe('teams');
+    expect(ui().view).toBe('home');
   });
 
   it('⑤ 연출 중 새로고침 → 이어하기 → 같은 연출 재생, 목숨·점수·기록 중복 없음', async () => {
@@ -243,7 +256,7 @@ describe('app 통합', () => {
     expect(lastPlay().kind).toBe('correct');
 
     boot(); // 같은 localStorage로 다시 bootstrap
-    expect(ui()).toMatchObject({ started: false, hasSavedGame: true, view: 'teams' });
+    expect(ui()).toMatchObject({ started: false, hasSavedGame: true, view: 'home' });
     expect(fake.player.play).not.toHaveBeenCalled();
     expect(state().progress).toMatchObject({ phase: 'correct', passedCount: 5 });
 
@@ -258,7 +271,7 @@ describe('app 통합', () => {
     await finish();
     expect(state().progress).toBeNull();
     expect(state().results).toEqual([expect.objectContaining({ passedCount: 5, outcome: 'clear' })]);
-    expect(ui().view).toBe('teams');
+    expect(ui().view).toBe('home');
   });
 
   it('⑤-2 오답 연출 중 새로고침 → 목숨 중복 차감 없음', async () => {
@@ -290,17 +303,17 @@ describe('app 통합', () => {
     expect(ui().notice).toContain('불러오지 못해');
   });
 
-  it('⑦ 연출 중 teams로 이동 → pause, returnToChallenge → resume', async () => {
+  it('⑦ 연출 중 home으로 이동 → pause, returnToChallenge → resume', async () => {
     await bootAndStart();
     actions().selectChoice(correctId());
-    actions().setView('teams');
+    actions().setView('home');
     expect(fake.player.pause).toHaveBeenCalledTimes(1);
-    expect(ui().view).toBe('teams');
+    expect(ui().view).toBe('home');
 
     actions().startChallenge('team-2'); // 진행 중 도전이 있으면 새 팀 시작 불가
     expect(state().progress!.activeTeamId).toBe('team-1');
 
-    actions().setView('leaderboard');
+    actions().setView('setup');
     actions().returnToChallenge();
     expect(ui().view).toBe('question');
     expect(fake.player.resume).toHaveBeenCalledTimes(1);
@@ -310,16 +323,18 @@ describe('app 통합', () => {
     expect(state().progress).toMatchObject({ phase: 'awaitingAnswer', questionIndex: 1 });
   });
 
-  it('전체 기록 초기화 → 연출 취소, 팀 유지, 진행·결과·Undo 제거', async () => {
+  it('관리 저장 → 연출 취소, 진행·결과·Undo 제거, 팀 재등록, 다음 첫 도전에 인트로', async () => {
     await bootAndStart();
     actions().selectChoice(wrongId());
-    actions().resetRecords();
+    setupTeams(['믿음팀', '소망팀']);
     expect(fake.player.cancel).toHaveBeenCalled();
     expect(state()).toMatchObject({ progress: null, results: [], undoHistory: [] });
     expect(state().teams.map((t) => t.status)).toEqual(['notStarted', 'notStarted']);
-    expect(ui().view).toBe('teams');
-    await flush();
-    expect(state().progress).toBeNull();
+    expect(ui().view).toBe('home');
+    actions().startChallenge('team-1');
+    expect(lastPlay().kind).toBe('intro');
+    await flush(); // 취소된 오답 연출의 늦은 신호가 새 도전을 바꾸지 않는다
+    expect(state().progress).toMatchObject({ activeTeamId: 'team-1', phase: 'choosingTrack', lives: 3 });
   });
 });
 
@@ -393,7 +408,7 @@ describe('회귀: app.ts 버그 수정', () => {
     actions().selectChoice(wrongId());
     const first = lastPlay();
     const spy = failSaves();
-    actions().resetRecords(); // cancel → 저장 실패로 상태 유지 → 같은 runId
+    setupTeams(['믿음팀', '소망팀']); // cancel → 저장 실패로 상태 유지 → 같은 runId
     actions().closeAdminMenu(); // 같은 연출 재재생 (이전 Promise의 then은 아직 실행 전)
     spy.mockRestore();
     expect(fake.plays).toHaveLength(2);
@@ -409,13 +424,13 @@ describe('회귀: app.ts 버그 수정', () => {
     await bootAndStart();
     actions().selectChoice(correctId());
     actions().openAdminMenu();
-    actions().setVolume(0.5); // 메뉴가 열린 동안 다른 update가 와도 pause는 한 번만
+    actions().openAdminMenu(); // 메뉴가 열린 동안 다른 update가 와도 pause는 한 번만
     vi.advanceTimersByTime(13_000);
     expect(ui().animationStuck).toBe(false);
     expect(fake.player.pause).toHaveBeenCalledTimes(1);
 
     actions().closeAdminMenu();
-    actions().setVolume(0.6);
+    actions().closeAdminMenu();
     expect(fake.player.resume).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(11_000);
     expect(ui().animationStuck).toBe(false);
@@ -425,7 +440,7 @@ describe('회귀: app.ts 버그 수정', () => {
 
   it('꿈 인트로: 첫 도전에서만, 재생 중 말씀 선택 무시, 첫 시작을 undo하면 인트로 취소 후 다음 시작에 다시 재생', async () => {
     boot();
-    actions().registerTeams([{ name: '믿음팀' }, { name: '소망팀' }]);
+    setupTeams(['믿음팀', '소망팀']);
     actions().start();
     actions().startChallenge('team-1');
     expect(ui().introPlaying).toBe(true);
