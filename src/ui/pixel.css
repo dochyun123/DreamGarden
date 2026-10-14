@@ -301,6 +301,12 @@
 .q-lives { position: absolute; right: 50px; top: 8px; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px 24px 18px; }
 .q-lives__label { font-size: 28px; color: var(--c-text-dim); }
 .q-lives__hearts { display: flex; gap: 18px; }
+.q-round { position: absolute; left: 50px; top: 8px; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 14px 24px 20px; }
+.q-round__label { font-size: 34px; }
+.q-round__bar { display: flex; gap: 8px; }
+.q-round__cell { width: 44px; height: 22px; background: var(--c-heart-empty); box-shadow: 4px 4px 0 var(--c-px-line); }
+.q-round__cell.is-now { background: var(--c-text-faint); }
+.q-round__cell.is-done { background: var(--c-highlight); }
 .heart {
   width: 54px; height: 48px;
   display: block;
@@ -339,6 +345,10 @@
   border-bottom: 8px solid var(--c-highlight);
   line-height: 1.05;
   vertical-align: baseline;
+}
+.q-blank--later {
+  min-width: 2.4em;
+  border-bottom: 5px solid var(--c-text-faint);
 }
 
 .choices {

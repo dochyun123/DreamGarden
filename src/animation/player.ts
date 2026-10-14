@@ -2,7 +2,7 @@
 import type { AnimationEndReason, AnimationKind } from '../types';
 import { PausableClock } from './clock';
 import { startDialogue, type Dialogue } from './dialogue';
-import { buildScene, heartScene, type Scene, type SfxFn } from './scenes';
+import { buildScene, heartScene, preloadImages, type Scene, type SfxFn } from './scenes';
 import { playSfx } from './sfx';
 import { ensureStyles } from './styles';
 
@@ -20,7 +20,7 @@ export interface AnimationPlayer {
    * host 위 전체화면 오버레이로 연출 재생. 끝나면 이유와 함께 resolve (reject 금지).
    * public/media/{kind}.mp4 가 있으면 영상 우선, 없거나 오류/타임아웃이면 CSS 대체 연출+자막.
    * 'wrong'은 오답 자막(1~1.5s) → 하트 소멸(0.5~0.8s)까지 포함. 정답을 공개하지 않는다.
-   * 'intro'(행사 첫 시작, 꿈에서 눈을 뜨면 지하 기차역)·'heaven'·'inferno'의 대체 연출은 장면 뒤에
+   * 'intro'(행사 첫 시작: 교회 → 설교 중 졸음 → 꿈속 지하 기차역 → 역 안내판, 장면마다 대사)·'heaven'·'inferno'의 대체 연출은 장면 뒤에
    * 대사 상자가 나오고 **클릭을 기다린다** (자동 종료 없음 → app의 '멈춤 감시'에서 제외할 것):
    *   글자가 나오는 중 클릭 = 그 줄 바로 다 보이기, 줄이 끝나면 ▶ 깜빡임 → 클릭 = 다음 줄,
    *   마지막 줄에서 클릭 = 'ended'. 클릭은 오버레이 아무 곳, 또는 Enter/Space 키.
@@ -99,6 +99,7 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
   let master: GainNode | null = null;
   const videoUnavailable = new Set<AnimationKind>();
   const lite = isLiteMode(win);
+  preloadImages(doc);
 
   function getAudio(): AudioContext | null {
     if (audio) return audio;
@@ -189,9 +190,16 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
           doc,
           parent: scene.root,
           lines: [...lines],
+          boxClass: scene.dialogueClass,
           schedule: (fn, ms) => s.clock.schedule(() => !s.done && fn(), ms),
           sfx: sfxFor(s),
-          onDone: () => finish(s, endReason),
+          onDone: () => {
+            if (!scene.next) return finish(s, endReason);
+            // 다음 장면으로 (인트로: 교회 → 설교 → 꿈 → 역 안내판)
+            s.dialogue = null;
+            scene.root.remove();
+            runScene(s, scene.next(), endReason);
+          },
         });
       }, scene.duration);
     } else s.clock.schedule(() => finish(s, endReason), scene.duration);
@@ -199,6 +207,7 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
 
   /** 대사 넘기기 입력: 오버레이 클릭 + Enter/Space. 대사 상자가 나오기 전·일시정지 중에는 무시 */
   function waitForInput(s: Session): void {
+    if (s.overlay.classList.contains('ap-modal')) return; // 이어지는 장면은 같은 입력을 쓴다
     s.overlay.classList.add('ap-modal');
     const advance = () => {
       if (s.done || paused || !s.dialogue) return false;

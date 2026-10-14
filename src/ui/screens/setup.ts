@@ -1,6 +1,9 @@
-// 담당: dream-2a — 관리 화면: 팀 수(±) · 팀 이름 · 말씀 10개(출처 한 줄 + 구절 여러 줄) → 저장 하나.
+// 담당: dream-2a — 관리 화면: 팀 수(±) · 팀 이름 · 말씀 1~10개(출처·구절·문제 4개, 추가·삭제) → 저장 하나.
 // 기존 값으로 미리 채운다. 기록(진행·결과)이 있으면 확인 모달을 거쳐 saveSetup을 부른다 (app이 기록 초기화 후 home으로).
 import type { GameState } from '../../types';
+import { TRACK_COUNT } from '../../types';
+import { emptyScriptureDraft, scriptureDraftOf } from '../../core/engine';
+import type { ScriptureDraft } from '../../core/engine';
 import type { Ctx, Screen, SetupForm } from '../context';
 import { h } from '../dom';
 
@@ -12,14 +15,14 @@ function formFrom(state: GameState): SetupForm {
   return {
     teamNames: state.teams.length
       ? state.teams.map((t) => t.name)
-      : Array.from({ length: Math.min(DEFAULT_TEAM_COUNT, maxTeams(state)) }, () => ''),
-    scriptures: state.questionSets.map((s) => ({ scriptureReference: s.scriptureReference, scriptureText: s.scriptureText })),
+      : Array.from({ length: Math.min(DEFAULT_TEAM_COUNT, state.questionSets.length) }, () => ''),
+    scriptures: state.questionSets.map(scriptureDraftOf),
   };
 }
 
 /** 팀 수 상한 = 말씀(갈림길) 수. 팀이 더 많으면 저장 검증에서 거부된다 */
-function maxTeams(state: GameState): number {
-  return Math.max(1, state.questionSets.length);
+function maxTeams(form: SetupForm): number {
+  return Math.max(1, form.scriptures.length);
 }
 
 function hasRecords(state: GameState): boolean {
@@ -29,13 +32,20 @@ function hasRecords(state: GameState): boolean {
 export function createSetupScreen(ctx: Ctx): Screen {
   let state: GameState | null = null;
   let teamsKey = '';
-  let scripturesKey = '';
+  /** 말씀 추가·삭제 때마다 증가 → 말씀 목록을 다시 만든다 */
+  let scripturesVersion = 0;
+  let builtVersion = -1;
+  /** 펼쳐 둔 말씀 (다시 만들어도 유지) */
+  const opened = new WeakSet<ScriptureDraft>();
+  let radioSeq = 0;
 
   const countValue = h('div', { class: 'stepper__value', attrs: { 'aria-live': 'polite' } });
   const minus = h('button', { class: 'btn', attrs: { type: 'button', 'aria-label': '팀 수 줄이기' }, on: { click: () => setCount(-1) } }, '−');
   const plus = h('button', { class: 'btn', attrs: { type: 'button', 'aria-label': '팀 수 늘리기' }, on: { click: () => setCount(1) } }, '+');
   const teamRows = h('div', { class: 'team-rows' });
   const scriptureRows = h('div', { class: 'scripture-rows' });
+  const scriptureTitle = h('h3', { class: 'panel__title' });
+  const addScripture = h('button', { class: 'btn btn--small', attrs: { type: 'button' }, on: { click: () => onAdd() } }, '+ 말씀 추가');
   const issues = h('div');
   const save = h('button', { class: 'btn btn--primary btn--large', attrs: { type: 'button' }, on: { click: () => onSave() } }, '저장');
   const cancel = h('button', { class: 'btn', attrs: { type: 'button' }, on: { click: () => ctx.actions.setView('home') } }, '취소');
@@ -59,7 +69,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
           ),
         ),
         h('div', { class: 'setup__main' },
-          h('h3', { class: 'panel__title' }, '말씀'),
+          h('div', { class: 'setup__head' }, scriptureTitle, h('span', { class: 'setup__hint' }, '보기 앞 ● = 정답'), addScripture),
           scriptureRows,
           issues,
           h('div', { class: 'setup__actions' }, save),
@@ -75,7 +85,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
 
   function setCount(d: number): void {
     const names = form().teamNames;
-    const next = Math.min(maxTeams(state!), Math.max(1, names.length + d));
+    const next = Math.min(maxTeams(form()), Math.max(1, names.length + d));
     while (names.length < next) names.push('');
     names.length = next;
     ctx.rerender();
@@ -83,7 +93,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
 
   function onSave(): void {
     const f = form();
-    const draft = { teamNames: f.teamNames.map((n) => n.trim()), scriptures: f.scriptures.map((s) => ({ ...s })) };
+    const draft = { teamNames: f.teamNames.map((n) => n.trim()), scriptures: structuredClone(f.scriptures) };
     const go = () => ctx.actions.saveSetup(draft);
     if (state && hasRecords(state)) {
       ctx.local.confirm = { kind: 'save', onOk: go };
@@ -105,13 +115,36 @@ export function createSetupScreen(ctx: Ctx): Screen {
     }));
   }
 
+  function onAdd(): void {
+    const list = form().scriptures;
+    if (list.length >= TRACK_COUNT) return;
+    const d = emptyScriptureDraft();
+    list.push(d);
+    opened.add(d);
+    scripturesVersion++;
+    ctx.rerender();
+    const card = scriptureRows.lastElementChild as HTMLElement | null;
+    card?.scrollIntoView({ block: 'nearest' });
+    card?.querySelector<HTMLInputElement>('input')?.focus();
+  }
+
+  function onRemove(d: ScriptureDraft): void {
+    const list = form().scriptures;
+    list.splice(list.indexOf(d), 1);
+    scripturesVersion++;
+    ctx.rerender();
+  }
+
   function buildScriptures(): void {
     const list = form().scriptures;
     scriptureRows.replaceChildren(...list.map((s, i) => {
+      const summaryRef = h('span', { class: 'scripture-card__ref' });
+      const showRef = () => { summaryRef.textContent = s.scriptureReference.trim() || '새 말씀'; };
+      showRef();
       const ref = h('input', {
         class: 'field',
         attrs: { type: 'text', value: s.scriptureReference, placeholder: '출처 (예: 시편 23:1)', maxlength: 40, 'aria-label': `말씀 ${i + 1} 출처` },
-        on: { input: () => { s.scriptureReference = ref.value; } },
+        on: { input: () => { s.scriptureReference = ref.value; showRef(); } },
       });
       const text = h('textarea', {
         class: 'field field--area',
@@ -119,8 +152,44 @@ export function createSetupScreen(ctx: Ctx): Screen {
         on: { input: () => { s.scriptureText = text.value; } },
       });
       text.value = s.scriptureText;
-      return h('div', { class: 'scripture-row' }, h('div', { class: 'team-row__num' }, i + 1), ref, text);
+      const remove = h('button', { class: 'btn btn--small btn--ghost', attrs: { type: 'button' }, on: { click: () => onRemove(s) } }, '이 말씀 삭제');
+
+      const card = h('details', { class: 'scripture-card', on: { toggle: () => { if (card.open) opened.add(s); else opened.delete(s); } } },
+        h('summary', { class: 'scripture-card__summary' }, h('span', { class: 'team-row__num' }, i + 1), summaryRef),
+        h('div', { class: 'scripture-row' }, ref, text),
+        s.questions.map((q, qi) => questionEditor(q, `말씀 ${i + 1} 문제 ${qi + 1}`, qi + 1)),
+        h('div', { class: 'scripture-card__foot' }, remove),
+      );
+      card.open = opened.has(s);
+      return card;
     }));
+  }
+
+  /** 문제 하나: 문장 + 보기 5칸, 보기 앞 동그라미로 정답 선택 */
+  function questionEditor(q: ScriptureDraft['questions'][number], label: string, num: number): HTMLElement {
+    const name = `answer-${radioSeq++}`;
+    const prompt = h('input', {
+      class: 'field',
+      attrs: { type: 'text', value: q.prompt, placeholder: '문장 — 빈칸은 ___ (예: 네 ___를 다하라)', 'aria-label': `${label} 문장` },
+      on: { input: () => { q.prompt = prompt.value; } },
+    });
+    return h('div', { class: 'q-edit' },
+      h('div', { class: 'q-edit__num' }, `문제 ${num}`),
+      prompt,
+      h('div', { class: 'q-edit__choices' }, q.choices.map((c, ci) => {
+        const radio = h('input', {
+          attrs: { type: 'radio', name, 'aria-label': `${label} 정답 ${ci + 1}번` },
+          on: { change: () => { q.answer = ci + 1; } },
+        });
+        radio.checked = q.answer === ci + 1;
+        const input = h('input', {
+          class: 'field',
+          attrs: { type: 'text', value: c, placeholder: `보기 ${ci + 1}`, 'aria-label': `${label} 보기 ${ci + 1}` },
+          on: { input: () => { q.choices[ci] = input.value; } },
+        });
+        return h('div', { class: 'q-edit__choice', attrs: { title: '동그라미 = 정답' } }, radio, input);
+      })),
+    );
   }
 
   return {
@@ -131,13 +200,14 @@ export function createSetupScreen(ctx: Ctx): Screen {
       const n = f.teamNames.length;
       countValue.textContent = String(n);
       minus.disabled = n <= 1;
-      plus.disabled = n >= maxTeams(s);
+      plus.disabled = n >= maxTeams(f);
       cancel.hidden = s.teams.length === 0;
 
       // 입력 중 포커스를 잃지 않도록 행 구성이 바뀔 때만 다시 만든다
       if (String(n) !== teamsKey) { teamsKey = String(n); buildTeams(); }
-      const sk = String(f.scriptures.length);
-      if (sk !== scripturesKey) { scripturesKey = sk; buildScriptures(); }
+      if (builtVersion !== scripturesVersion) { builtVersion = scripturesVersion; buildScriptures(); }
+      scriptureTitle.textContent = `말씀 ${f.scriptures.length}/${TRACK_COUNT}`;
+      addScripture.disabled = f.scriptures.length >= TRACK_COUNT;
 
       const list = ui.issues;
       issues.replaceChildren(

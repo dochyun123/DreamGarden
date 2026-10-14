@@ -43,6 +43,7 @@ vi.mock('../animation/player', () => ({
 }));
 
 import { bootstrap } from './app';
+import { scriptureDraftOf } from '../core/engine';
 
 function installPlayer(): void {
   const p = fake.player;
@@ -103,7 +104,7 @@ function boot(): void {
 function setupTeams(names: string[]): void {
   actions().saveSetup({
     teamNames: names,
-    scriptures: state().questionSets.map((s) => ({ scriptureReference: s.scriptureReference, scriptureText: s.scriptureText })),
+    scriptures: state().questionSets.map(scriptureDraftOf),
   });
 }
 
@@ -138,16 +139,16 @@ describe('app 통합', () => {
     setupTeams([' ']);
     expect(ui().issues).toHaveLength(1);
     expect(state().teams).toEqual([]);
-    actions().saveSetup({ teamNames: ['믿음팀'], scriptures: state().questionSets.map(() => ({ scriptureReference: '요한복음 3:16', scriptureText: ' ' })) });
+    actions().saveSetup({ teamNames: ['믿음팀'], scriptures: state().questionSets.map((s) => ({ ...scriptureDraftOf(s), scriptureReference: '요한복음 3:16', scriptureText: ' ' })) });
     expect(ui().issues).toHaveLength(state().questionSets.length); // 구절 빈칸
     actions().saveSetup({
       teamNames: ['믿음팀'],
-      scriptures: state().questionSets.map((_, i) => ({ scriptureReference: ` 출처${i + 1} `, scriptureText: `구절${i + 1}` })),
+      scriptures: state().questionSets.map((s, i) => ({ ...scriptureDraftOf(s), scriptureReference: ` 출처${i + 1} `, scriptureText: `구절${i + 1}` })),
     });
     expect(ui()).toMatchObject({ view: 'home', issues: [] });
     expect(state().teams.map((t) => t.name)).toEqual(['믿음팀']);
     expect(state().questionSets[2]).toMatchObject({ scriptureReference: '출처3', scriptureText: '구절3' });
-    expect(state().questionSets[2].questions).toHaveLength(5); // 문제는 그대로
+    expect(state().questionSets[2].questions).toHaveLength(4); // 문제는 그대로
   });
 
   it('① 시작 → 도전 시작 → 정답 → play(correct) → ended → 다음 문제 대기', async () => {
@@ -160,7 +161,7 @@ describe('app 통합', () => {
     expect(state().progress).toMatchObject({ phase: 'correct', passedCount: 1 });
     expect(fake.player.play).toHaveBeenCalledTimes(1);
     expect(lastPlay().kind).toBe('correct');
-    expect(lastPlay().ctx).toEqual({ teamName: '믿음팀', scriptureReference: '샘플 1장 1절', livesBefore: 3, livesAfter: 3 });
+    expect(lastPlay().ctx).toEqual({ teamName: '믿음팀', scriptureReference: '데살로니가후서 2:15', livesBefore: 3, livesAfter: 3 });
 
     // 연출 중 추가 클릭은 무시
     actions().selectChoice(wrongId());
@@ -248,29 +249,29 @@ describe('app 통합', () => {
 
   it('⑤ 연출 중 새로고침 → 이어하기 → 같은 연출 재생, 목숨·점수·기록 중복 없음', async () => {
     await bootAndStart();
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       actions().selectChoice(correctId());
       await finish();
     }
-    actions().selectChoice(correctId()); // 5번째 정답 연출 중 새로고침
+    actions().selectChoice(correctId()); // 4번째 정답 연출 중 새로고침
     expect(lastPlay().kind).toBe('correct');
 
     boot(); // 같은 localStorage로 다시 bootstrap
     expect(ui()).toMatchObject({ started: false, hasSavedGame: true, view: 'home' });
     expect(fake.player.play).not.toHaveBeenCalled();
-    expect(state().progress).toMatchObject({ phase: 'correct', passedCount: 5 });
+    expect(state().progress).toMatchObject({ phase: 'correct', passedCount: 4 });
 
     actions().start();
     expect(ui()).toMatchObject({ started: true, hasSavedGame: false, view: 'question' });
     expect(lastPlay().kind).toBe('correct');
-    expect(state().progress).toMatchObject({ passedCount: 5, lives: 3 });
+    expect(state().progress).toMatchObject({ passedCount: 4, lives: 3 });
     expect(state().results).toHaveLength(1);
 
     await finish();
     expect(lastPlay().kind).toBe('heaven');
     await finish();
     expect(state().progress).toBeNull();
-    expect(state().results).toEqual([expect.objectContaining({ passedCount: 5, outcome: 'clear' })]);
+    expect(state().results).toEqual([expect.objectContaining({ passedCount: 4, outcome: 'clear' })]);
     expect(ui().view).toBe('home');
   });
 

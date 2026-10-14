@@ -65,7 +65,7 @@ export function bootstrap(root: HTMLElement): void {
       update();
     },
     saveSetup(draft) {
-      const issues = validateSetup(draft, contentOf(state));
+      const issues = validateSetup(draft);
       ui.issues = issues;
       if (issues.length === 0) {
         cancelAnimation();
@@ -259,9 +259,6 @@ function loadState(storage: GameStorage): { state: GameState; notice: string | n
   return { state: initial, notice: null };
 }
 
-function contentOf(state: GameState): ContentFile {
-  return { contentVersion: state.contentVersion, questionSets: state.questionSets };
-}
 
 function enterFullscreen(): void {
   if (document.fullscreenElement) return;

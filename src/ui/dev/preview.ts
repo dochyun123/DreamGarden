@@ -35,9 +35,9 @@ let state: GameState = {
     phase: screen === 'station' ? 'choosingTrack' : 'awaitingAnswer', selectedChoiceId: null, runId: 1,
   },
   results: fresh ? [] : [
-    { teamId: 'team-1', passedCount: 5, outcome: 'clear', completedAt: '' },
+    { teamId: 'team-1', passedCount: 4, outcome: 'clear', completedAt: '' },
     { teamId: 'team-2', passedCount: 2, outcome: 'failed', completedAt: '' },
-    { teamId: 'team-3', passedCount: 5, outcome: 'clear', completedAt: '' },
+    { teamId: 'team-3', passedCount: 4, outcome: 'clear', completedAt: '' },
   ],
   undoHistory: [],
 };

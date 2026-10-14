@@ -35,10 +35,12 @@ function melody(ctx: AudioContext, out: AudioNode, seq: [number, number][], type
   }
 }
 
-export type SfxName = 'intro' | 'correct' | 'wrong' | 'heartBreak' | 'heaven' | 'fall' | 'inferno' | 'wake' | 'blip';
+export type SfxName =
+  | 'intro' | 'correct' | 'wrong' | 'heartBreak' | 'heaven' | 'fall' | 'inferno' | 'wake' | 'blip'
+  | 'horn' | 'chime' | 'rattle';
 
 // 음 높이 (Hz)
-const C4 = 261.63, E4 = 329.63, G4 = 392.0, A4 = 440.0;
+const C4 = 261.63, E4 = 329.63, G4 = 392.0, A4 = 440.0, B4 = 493.88;
 const C5 = 523.25, D5 = 587.33, E5 = 659.25, G5 = 783.99, A5 = 880.0, C6 = 1046.5;
 
 export function playSfx(ctx: AudioContext, out: AudioNode, name: SfxName): void {
@@ -70,6 +72,22 @@ export function playSfx(ctx: AudioContext, out: AudioNode, name: SfxName): void 
       break;
     case 'blip': // 대사 글자 소리
       note(ctx, out, { freq: 620, at: 0, dur: 0.03, gain: 0.05 });
+      break;
+    case 'horn': // 자동차 경적 "빵빵" — 두 음을 겹쳐 낸다
+      for (const [at, dur] of [[0, 0.16], [0.24, 0.42]]) {
+        note(ctx, out, { freq: 370, at, dur, gain: 0.07 });
+        note(ctx, out, { freq: 466, at, dur, gain: 0.07 });
+      }
+      break;
+    case 'chime': // 역 안내 방송 "딩동댕동"
+      melody(ctx, out, [[E5, 0.32], [C5, 0.32], [D5, 0.32], [G4, 0.6]], 'triangle', 0.2);
+      break;
+    case 'rattle': // 기차 "덜컹덜컹" — 낮은 쿵 두 번씩 네 마디
+      for (let i = 0; i < 4; i++) {
+        note(ctx, out, { type: 'triangle', freq: 85, freqEnd: 60, at: i * 0.42, dur: 0.07, gain: 0.35 });
+        note(ctx, out, { type: 'triangle', freq: 75, freqEnd: 50, at: i * 0.42 + 0.13, dur: 0.07, gain: 0.3 });
+        note(ctx, out, { freq: B4 * 2, at: i * 0.42, dur: 0.02, gain: 0.02 });
+      }
       break;
   }
 }

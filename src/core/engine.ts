@@ -2,10 +2,10 @@
 // 모든 함수는 순수 함수: 입력 state를 변경하지 않고 새 state를 반환한다.
 // 허용되지 않는 동작(잘못된 phase, 완료 팀 선택 등)은 state를 그대로 반환한다(throw 금지).
 import {
-  QUESTIONS_PER_SET, SCHEMA_VERSION, STARTING_LIVES,
+  CHOICES_PER_QUESTION, QUESTIONS_PER_SET, SCHEMA_VERSION, STARTING_LIVES,
 } from '../types';
 import type {
-  AnimationKind, ContentFile, GameSnapshot, GameState, Phase, Question, Team,
+  AnimationKind, ContentFile, GameSnapshot, GameState, Phase, Question, QuestionSet, Team,
 } from '../types';
 
 export interface TeamDraft {
@@ -48,26 +48,71 @@ export function registerTeams(state: GameState, drafts: TeamDraft[]): GameState 
   return { ...state, teams, undoHistory: [] };
 }
 
+/** 관리 화면의 문제 하나: 문장(빈칸 "___"), 보기 5개, 정답 번호(1~5, 0 = 아직 안 고름) */
+export interface QuestionDraft {
+  prompt: string;
+  choices: string[];
+  answer: number;
+}
+
 export interface ScriptureDraft {
   scriptureReference: string;
   scriptureText: string;
+  questions: QuestionDraft[];
 }
 
-/** 관리 화면 저장 내용: 팀 이름들 + 갈림길(세트) 순서대로 말씀 출처·구절. 문제는 기존 세트의 것을 그대로 쓴다 */
+/** 관리 화면 저장 내용: 팀 이름들 + 갈림길 순서대로 말씀(출처·구절·문제) */
 export interface SetupDraft {
   teamNames: string[];
   scriptures: ScriptureDraft[];
 }
 
+/** 빈칸 표기 통일: 밑줄·대시 2개 이상("__", "———")을 "___"로 */
+export function normalizePrompt(prompt: string): string {
+  return prompt.trim().replace(/[_—–]{2,}/g, '___');
+}
+
+export function scriptureDraftOf(set: QuestionSet): ScriptureDraft {
+  return {
+    scriptureReference: set.scriptureReference,
+    scriptureText: set.scriptureText,
+    questions: set.questions.map((q) => ({
+      prompt: q.prompt,
+      choices: q.choices.map((c) => c.text),
+      answer: q.choices.findIndex((c) => c.id === q.correctChoiceId) + 1,
+    })),
+  };
+}
+
+export function emptyScriptureDraft(): ScriptureDraft {
+  return {
+    scriptureReference: '',
+    scriptureText: '',
+    questions: Array.from({ length: QUESTIONS_PER_SET }, () => ({
+      prompt: '', choices: Array.from({ length: CHOICES_PER_QUESTION }, () => ''), answer: 0,
+    })),
+  };
+}
+
 /**
  * 관리 화면 저장. 기록을 먼저 초기화(진행·결과·Undo 제거)한 뒤
- * 세트 i의 말씀 출처·구절을 scriptures[i]로 바꾸고 팀을 다시 등록한다. 검증은 validateSetup이 먼저 한다.
+ * 말씀 목록을 draft로 통째로 바꾸고(id는 순서대로 다시 매김) 팀을 다시 등록한다. 검증은 validateSetup이 먼저 한다.
  */
 export function saveSetup(state: GameState, draft: SetupDraft): GameState {
-  const questionSets = state.questionSets.map((set, i) => {
-    const d = draft.scriptures[i];
-    return d ? { ...set, scriptureReference: d.scriptureReference.trim(), scriptureText: d.scriptureText.trim() } : set;
-  });
+  const questionSets: QuestionSet[] = draft.scriptures.map((d, si) => ({
+    id: `set-${si + 1}`,
+    scriptureReference: d.scriptureReference.trim(),
+    scriptureText: d.scriptureText.trim(),
+    questions: d.questions.map((q, qi) => {
+      const qid = `s${si + 1}-q${qi + 1}`;
+      return {
+        id: qid,
+        prompt: normalizePrompt(q.prompt),
+        choices: q.choices.map((text, ci) => ({ id: `${qid}-c${ci + 1}`, text: text.trim() })),
+        correctChoiceId: `${qid}-c${q.answer}`,
+      };
+    }),
+  }));
   return registerTeams({ ...resetRecords(state), questionSets }, draft.teamNames.map((name) => ({ name })));
 }
 

@@ -1,5 +1,6 @@
 // 담당: dream-2a — 화면 컴포넌트가 공유하는 타입과 화면 내부 상태(영속 안 함)
 import type { GameState } from '../types';
+import type { ScriptureDraft } from '../core/engine';
 import type { UiActions, UiState } from './ui';
 
 /** 화면 하나 = 루트 요소 + 상태 반영 함수. 같은 화면이 유지되는 동안 update만 반복 호출된다. */
@@ -11,7 +12,7 @@ export interface Screen {
 /** 관리 화면 입력 중인 값 (저장 전까지 UI만 가진다) */
 export interface SetupForm {
   teamNames: string[]; // 길이 = 팀 수
-  scriptures: { scriptureReference: string; scriptureText: string }[]; // state.questionSets 순서
+  scriptures: ScriptureDraft[]; // 갈림길 순서. 추가·삭제 가능 (최대 TRACK_COUNT)
 }
 
 /** UI 내부 전용 상태 (app의 UiState와 별개) */

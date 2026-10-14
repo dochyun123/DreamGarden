@@ -57,8 +57,11 @@ afterEach(() => {
 
 describe('연출 길이 기준', () => {
   it('기획서 범위 안에 있다', () => {
-    expect(DURATION.correct).toBeGreaterThanOrEqual(1500);
-    expect(DURATION.correct).toBeLessThanOrEqual(2000);
+    // 정답: 자막 1~1.5초 → 터널 통과, 합쳐 2.5~3.5초
+    expect(DURATION.correctCaption).toBeGreaterThanOrEqual(1000);
+    expect(DURATION.correctCaption).toBeLessThanOrEqual(1500);
+    expect(DURATION.correct).toBeGreaterThanOrEqual(2500);
+    expect(DURATION.correct).toBeLessThanOrEqual(3500);
     expect(DURATION.wrongCaption).toBeGreaterThanOrEqual(1000);
     expect(DURATION.wrongCaption).toBeLessThanOrEqual(1500);
     expect(DURATION.heart).toBeGreaterThanOrEqual(500);
@@ -67,10 +70,9 @@ describe('연출 길이 기준', () => {
       expect(d).toBeGreaterThanOrEqual(4000);
       expect(d).toBeLessThanOrEqual(6000);
     }
-    // 인트로: 장면 + 대사 타자기 ≈ 6~9초
-    const intro = DURATION.intro + longest(DIALOGUE.intro) * CHAR_MS;
-    expect(intro).toBeGreaterThanOrEqual(4000);
-    expect(intro).toBeLessThanOrEqual(9000);
+    // 인트로 네 장면(대사 제외)은 합쳐 10초 이내
+    const intro = DURATION.introChurch + DURATION.introSermon + DURATION.intro + DURATION.introSign;
+    expect(intro).toBeLessThanOrEqual(10000);
   });
 });
 
@@ -354,7 +356,7 @@ describe('저사양 모드', () => {
 
 describe('픽셀아트', () => {
   it('그림은 crispEdges SVG로 그린다', () => {
-    for (const kind of ['intro', 'correct', 'heaven', 'inferno'] as const) {
+    for (const kind of ['correct', 'heaven', 'inferno'] as const) {
       track(player.play(kind, ctx));
       video()?.dispatchEvent(new Event('error'));
       const svgs = host.querySelectorAll('svg');
@@ -444,19 +446,48 @@ describe('인트로', () => {
     expect(video()?.getAttribute('src')).toBe('./media/intro.mp4');
   });
 
-  it('눈을 뜨면 지하 기차역 → 대사 → 클릭하면 ended', async () => {
+  it('교회 → 설교 → 잠들어 지하 기차역 → 안내판, 장면마다 대사를 클릭으로 넘기면 ended', async () => {
     const t = track(player.play('intro', introCtx));
     video()!.dispatchEvent(new Event('error'));
-    expect(host.querySelector('[data-scene="intro"] .ap-station')).not.toBeNull();
-    expect(host.querySelectorAll('.ap-lid').length).toBe(2);
+    expect(host.querySelector('[data-scene="intro-church"] .ap-church')).not.toBeNull();
     expect(overlay()!.classList.contains('ap-modal')).toBe(true);
-    await vi.advanceTimersByTimeAsync(DURATION.intro - 1);
+    await vi.advanceTimersByTimeAsync(DURATION.introChurch - 1);
     expect(dialogue()).toBeNull();
     await vi.advanceTimersByTimeAsync(1);
     expect(dialogue()).not.toBeNull();
+    await clickThrough(DIALOGUE.introChurch);
+
+    expect(host.querySelector('[data-scene="intro-church"]')).toBeNull();
+    expect(host.querySelector('[data-scene="intro-sermon"] .ap-sermon')).not.toBeNull();
+    expect(dialogue()).toBeNull();
+    await vi.advanceTimersByTimeAsync(DURATION.introSermon);
+    await clickThrough(DIALOGUE.introSermon);
+
+    expect(host.querySelector('[data-scene="intro"] .ap-station')).not.toBeNull();
+    expect(host.querySelectorAll('.ap-lid').length).toBe(2);
+    await vi.advanceTimersByTimeAsync(DURATION.intro);
+    expect(host.querySelector('.ap-sermon')).toBeNull();
+    expect(host.querySelector('.ap-station.clear')).not.toBeNull();
     await clickThrough(DIALOGUE.intro);
+
+    expect(host.querySelector('[data-scene="intro-sign"]')).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(DURATION.introSign);
+    expect(host.querySelector('.ap-dlg.ap-notice')).not.toBeNull();
+    expect(t.result).toBeUndefined();
+    await clickThrough(DIALOGUE.introSign);
     expect(t.result).toBe('ended');
     expect(overlay()).toBeNull();
+  });
+
+  it('정답 자막 뒤 터널을 지나 다음 문제로', async () => {
+    const t = track(player.play('correct', ctx));
+    video()!.dispatchEvent(new Event('error'));
+    expect(host.querySelector('[data-part="tunnel"]')).toBeNull();
+    await vi.advanceTimersByTimeAsync(DURATION.correctCaption);
+    expect(host.textContent).not.toContain('정답!');
+    expect(host.querySelector('[data-part="tunnel"]')).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(DURATION.correct - DURATION.correctCaption);
+    expect(t.result).toBe('ended');
   });
 
   it('영상이 끝나면 대사 없이 ended', async () => {

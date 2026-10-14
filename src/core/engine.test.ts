@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import sample from '../../data/sample-content.json';
 import type { ContentFile, GameState } from '../types';
 import {
-  availableSetIds, completeAnimation, createInitialState, saveSetup, getCurrentQuestion, lastUndoLabel, registerTeams,
+  availableSetIds, completeAnimation, createInitialState, emptyScriptureDraft, saveSetup, scriptureDraftOf, getCurrentQuestion, lastUndoLabel, registerTeams,
   replaceContent, resetRecords, resumeRun, selectChoice, selectTrack, startChallenge, undo,
 } from './engine';
 
@@ -22,7 +22,6 @@ function begin(state: GameState, teamId: string): GameState {
   return selectTrack(s, `set-${teamId.split('-')[1]}`);
 }
 
-/** 샘플 데이터 규칙: 모든 문제의 정답은 2번 보기 */
 function correctId(state: GameState): string {
   return getCurrentQuestion(state)!.correctChoiceId;
 }
@@ -50,10 +49,10 @@ function deepFreeze<T>(v: T): T {
 }
 
 describe('기본 동작', () => {
-  it('샘플 데이터 정답 규칙과 일치한다', () => {
-    const q = content.questionSets[0].questions;
-    q.forEach((question) => {
-      expect(question.correctChoiceId).toBe(question.choices[1].id);
+  it('문제 데이터: 세트마다 4문제, 정답 id가 보기 안에 있다', () => {
+    content.questionSets.forEach((set) => {
+      expect(set.questions).toHaveLength(4);
+      set.questions.forEach((q) => expect(q.choices.map((c) => c.id)).toContain(q.correctChoiceId));
     });
   });
 
@@ -149,29 +148,29 @@ describe('기본 동작', () => {
 });
 
 describe('기획서 8장 검수 기준', () => {
-  it('5문제 연속 정답 → 문제마다 자동 진행, 마지막에 heaven, clear 기록 1개', () => {
+  it('4문제 연속 정답 → 문제마다 자동 진행, 마지막에 heaven, clear 기록 1개', () => {
     let s = begin(setup(), 'team-1');
     const phases: string[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       expect(s.progress!.questionIndex).toBe(i);
       s = answer(s, correctId(s), phases);
     }
-    expect(phases).toEqual(['correct', 'correct', 'correct', 'correct', 'correct', 'heaven']);
+    expect(phases).toEqual(['correct', 'correct', 'correct', 'correct', 'heaven']);
     expect(s.progress).toBeNull();
     expect(s.teams[0].status).toBe('completed');
     expect(s.results).toHaveLength(1);
-    expect(s.results[0]).toMatchObject({ teamId: 'team-1', passedCount: 5, outcome: 'clear' });
+    expect(s.results[0]).toMatchObject({ teamId: 'team-1', passedCount: 4, outcome: 'clear' });
   });
 
-  it('마지막 정답 판정 시점에 기록·완료 상태를 저장하고 questionIndex는 4를 유지', () => {
+  it('마지막 정답 판정 시점에 기록·완료 상태를 저장하고 questionIndex는 3을 유지', () => {
     let s = begin(setup(), 'team-1');
-    for (let i = 0; i < 4; i++) s = answer(s, correctId(s));
+    for (let i = 0; i < 3; i++) s = answer(s, correctId(s));
     s = selectChoice(s, correctId(s));
-    expect(s.progress).toMatchObject({ phase: 'correct', passedCount: 5, questionIndex: 4 });
+    expect(s.progress).toMatchObject({ phase: 'correct', passedCount: 4, questionIndex: 3 });
     expect(s.results).toHaveLength(1);
     expect(s.teams[0].status).toBe('completed');
     s = completeAnimation(s, s.progress!.runId);
-    expect(s.progress).toMatchObject({ phase: 'heaven', questionIndex: 4 });
+    expect(s.progress).toMatchObject({ phase: 'heaven', questionIndex: 3 });
     expect(s.results).toHaveLength(1);
   });
 
@@ -312,12 +311,12 @@ describe('기획서 8장 검수 기준', () => {
 
   it('연출 중 새로고침 → 저장/로드 후 resumeRun 해도 점수·목숨·기록 중복 없음', () => {
     let s = begin(setup(), 'team-1');
-    for (let i = 0; i < 4; i++) s = answer(s, correctId(s));
+    for (let i = 0; i < 3; i++) s = answer(s, correctId(s));
     s = selectChoice(s, correctId(s)); // 마지막 정답 연출 중
     const oldRun = s.progress!.runId;
 
     let loaded = resumeRun(JSON.parse(JSON.stringify(s)) as GameState);
-    expect(loaded.progress).toMatchObject({ phase: 'correct', passedCount: 5, lives: 3 });
+    expect(loaded.progress).toMatchObject({ phase: 'correct', passedCount: 4, lives: 3 });
     expect(completeAnimation(loaded, oldRun)).toBe(loaded); // 새로고침 전 콜백 무시
     loaded = completeAnimation(loaded, loaded.progress!.runId);
     expect(loaded.progress!.phase).toBe('heaven');
@@ -327,7 +326,7 @@ describe('기획서 8장 검수 기준', () => {
     loaded = completeAnimation(loaded, loaded.progress!.runId);
     expect(loaded.progress).toBeNull();
     expect(loaded.results).toHaveLength(1);
-    expect(loaded.results[0]).toMatchObject({ passedCount: 5, outcome: 'clear' });
+    expect(loaded.results[0]).toMatchObject({ passedCount: 4, outcome: 'clear' });
 
     // 오답 연출 중 새로고침
     let w = begin(loaded, 'team-2');
@@ -358,7 +357,7 @@ describe('관리 화면 저장', () => {
     let s = begin(setup(), 'team-1');
     for (let i = 0; i < 3; i++) s = answer(s, wrongId(s));
     s = begin(s, 'team-2');
-    const scriptures = s.questionSets.map((_, i) => ({ scriptureReference: ` 출처${i + 1} `, scriptureText: `구절${i + 1}` }));
+    const scriptures = s.questionSets.map((set, i) => ({ ...scriptureDraftOf(set), scriptureReference: ` 출처${i + 1} `, scriptureText: `구절${i + 1}` }));
     const r = saveSetup(s, { teamNames: ['가', '나'], scriptures });
     expect(r.progress).toBeNull();
     expect(r.results).toEqual([]);
@@ -370,4 +369,28 @@ describe('관리 화면 저장', () => {
     expect(r.questionSets[0]).toMatchObject({ scriptureReference: '출처1', scriptureText: '구절1' });
     expect(r.questionSets[0].questions).toEqual(s.questionSets[0].questions);
   });
+
+  it('말씀 추가·삭제: 순서대로 id를 다시 매기고, 빈칸 "———"는 "___"로, 정답 번호 → id', () => {
+    const s = setup(2);
+    const list = s.questionSets.map(scriptureDraftOf).slice(1); // 첫 말씀 삭제
+    const added = emptyScriptureDraft();
+    added.scriptureReference = '시편 23:1';
+    added.scriptureText = '여호와는 나의 목자시니';
+    added.questions.forEach((q, i) => {
+      q.prompt = ` 여호와는 ——— 목자시니 ${i} `;
+      q.choices = ['가', '나', '다', '라', ' 마 '];
+      q.answer = 5;
+    });
+    const r = saveSetup(s, { teamNames: ['가'], scriptures: [...list, added] });
+    expect(r.questionSets.map((x) => x.id)).toEqual(['set-1', 'set-2', 'set-3', 'set-4', 'set-5']);
+    expect(r.questionSets[0].scriptureReference).toBe(s.questionSets[1].scriptureReference);
+    expect(r.questionSets[0].questions[0].id).toBe('s1-q1');
+    expect(r.questionSets[4].questions[0]).toEqual({
+      id: 's5-q1',
+      prompt: '여호와는 ___ 목자시니 0',
+      choices: ['가', '나', '다', '라', '마'].map((text, k) => ({ id: `s5-q1-c${k + 1}`, text })),
+      correctChoiceId: 's5-q1-c5',
+    });
+  });
+
 });

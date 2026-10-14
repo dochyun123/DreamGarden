@@ -46,15 +46,50 @@ export const CSS = `
 .ap-lid.bot{bottom:0}
 .ap-lid.snap{transition:height .12s steps(2)}
 
-/* 인트로 */
-.ap-intro{background:#000}
+/* 인트로: 교회 → 설교 (사용자 그림) → 졸음 → 꿈속 기차역 → 안내판 */
+.ap-intro,.ap-intro-church,.ap-intro-sermon,.ap-intro-sign{background:#000}
+.ap-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:auto}
+.ap-church{object-position:50% 40%;animation:ap-fade-in .6s steps(4) both,ap-zoom 8s linear both}
+.ap-intro-sermon .ap-sermon{object-position:50% 45%;animation:ap-fade-in .5s steps(3) both}
+.ap-intro .ap-sermon{object-position:50% 45%}
+.ap-intro.drowsy .ap-sermon{animation:ap-drowsy 2.4s steps(8) both}
+.ap-vignette{position:absolute;inset:0;opacity:0;transition:opacity 1.6s steps(6);
+  background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.55) 65%,#000 100%)}
+.ap-intro.drowsy .ap-vignette{opacity:1}
+.ap-intro.dreaming .ap-vignette{opacity:0;transition:none}
+.ap-nod{position:absolute;left:0;right:0;top:50%;margin-top:-4cqh;text-align:center;font-size:7cqh;line-height:8cqh;color:#fff;z-index:2;
+  text-shadow:${OUTLINE('.6cqh')};visibility:hidden}
+.ap-nod.on{visibility:visible;animation:ap-nod .8s steps(4) both}
+.ap-intro .ap-dream{visibility:hidden}
+.ap-intro.dreaming .ap-dream{visibility:visible}
 .ap-station{position:absolute;inset:0;filter:blur(1.6cqh) brightness(.45) saturate(.4);transition:filter 1s steps(5)}
 .ap-station.clear{filter:blur(0) brightness(1) saturate(1)}
 .ap-intro.awake .ap-dream{animation:ap-fade-out .4s steps(2) both}
+.ap-intro-sign .ap-dim{background:rgba(12,10,24,.35)}
+
+/* 역 안내판 (지하철 표지판: 남색 바탕·흰 글씨, 천장에 매달림) */
+.ap-dlg.ap-notice{left:10cqw;right:10cqw;top:16cqh;bottom:auto;height:auto;min-height:40cqh;padding:12cqh 5cqw 5cqh;
+  background:#1D3A6E;color:#fff;border:1.2cqh solid #E8E8E8;
+  box-shadow:0 0 0 .8cqh #0B1630,inset 0 0 0 .8cqh #2E5597,0 1.6cqh 0 .8cqh rgba(0,0,0,.4);
+  font-size:6cqh;line-height:1.45;text-align:center;word-break:keep-all}
+.ap-notice::before{content:'안내';position:absolute;left:0;right:0;top:0;height:8.5cqh;line-height:8.5cqh;
+  background:#3FA7A0;color:#fff;font-size:4.6cqh;letter-spacing:1cqh}
+.ap-notice::after{content:'';position:absolute;top:-17cqh;left:18%;right:18%;height:16cqh;
+  border-left:1cqh solid #4A5068;border-right:1cqh solid #4A5068}
+.ap-notice .ap-dlg-next{color:#FFE066}
 
 /* 정답 */
 .ap-correct .ap-flash{background:#FFF3B0}
 .ap-correct .ap-big{--cap:#FFE066;--o:#5A3A00}
+
+/* 터널 통과: 어둠 속에서 벽 등이 가운데서 양옆으로 스쳐 가고, 기차가 덜컹거린다. 끝에 출구 빛 */
+.ap-tunnel{position:absolute;inset:0;background:#07060F;animation:ap-fade-in .3s steps(3) both}
+.ap-ride{position:absolute;inset:0;animation:ap-rattle .42s steps(1,end) infinite}
+.ap-tlamp{position:absolute;top:44%;left:50%;width:2cqw;height:1cqh;background:#FFE7A0;
+  box-shadow:0 0 0 .6cqh rgba(255,220,140,.25);animation:ap-lamp-l .4s linear var(--delay) infinite}
+.ap-tlamp.r{animation-name:ap-lamp-r}
+.ap-tlight{position:absolute;left:50%;top:46%;width:0;height:0;background:#FFF6D8;opacity:0}
+.ap-tunnel.ap-exit .ap-tlight{animation:ap-exit .4s steps(5) both}
 
 /* 오답 */
 .ap-wrong .ap-flash{background:#E8343F}
@@ -125,6 +160,8 @@ export const CSS = `
 
 /* 저사양 모드 (?lite=1): blur 필터·무한 반복 줄이기 */
 .ap-lite .ap-station{filter:brightness(.45)}
+.ap-lite.ap-overlay .ap-intro.drowsy .ap-sermon{animation:none;filter:brightness(.7)}
+.ap-lite .ap-church{animation:ap-fade-in .6s steps(4) both}
 .ap-lite .ap-station.clear{filter:brightness(1)}
 .ap-lite .ap-ray{animation:none}
 .ap-lite .ap-ember{animation-iteration-count:1}
@@ -144,6 +181,13 @@ export const CSS = `
 @keyframes ap-rise-in{from{transform:translateY(100%)}to{transform:none}}
 @keyframes ap-scroll{from{transform:none}to{transform:translateY(-13.33cqh)}}
 @keyframes ap-flick{0%{transform:none}50%{transform:scaleX(-1) scaleY(1.1)}}
+@keyframes ap-zoom{from{transform:scale(1)}to{transform:scale(1.08)}}
+@keyframes ap-drowsy{from{filter:none}to{filter:blur(.8cqh) brightness(.6) saturate(.6)}}
+@keyframes ap-nod{0%{transform:translateY(-2cqh);opacity:0}50%{transform:translateY(1cqh);opacity:1}100%{transform:none;opacity:1}}
+@keyframes ap-rattle{0%{transform:none}30%{transform:translateY(.8cqh)}45%{transform:none}60%{transform:translateY(.5cqh)}75%{transform:none}}
+@keyframes ap-lamp-l{from{transform:translate(-1cqw,0) scale(.3)}to{transform:translate(-60cqw,-30cqh) scale(4);opacity:.9}}
+@keyframes ap-lamp-r{from{transform:translate(-1cqw,0) scale(.3)}to{transform:translate(58cqw,-30cqh) scale(4);opacity:.9}}
+@keyframes ap-exit{from{opacity:.4;left:47%;top:43%;width:6%;height:6%}to{opacity:1;left:0;top:0;width:100%;height:100%}}
 @keyframes ap-ember{from{transform:none;opacity:1}to{transform:translateY(-60cqh);opacity:0}}
 `;
 

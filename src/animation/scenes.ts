@@ -20,13 +20,24 @@ import {
   type Rect,
 } from './pixel';
 import type { SfxName } from './sfx';
+import churchUrl from './assets/church.jpg?url';
+import sermonUrl from './assets/sermon.jpg?url';
 
 /**
  * 장면 길이(ms). intro/heaven/inferno는 이 시간 뒤 대사 상자가 나오고, 클릭할 때까지 기다린다.
  */
 export const DURATION = {
-  intro: 3600,
-  correct: 1800,
+  /** 인트로 1: 교회 외관 (경적) */
+  introChurch: 1400,
+  /** 인트로 2: 전도사님 설교 */
+  introSermon: 1000,
+  /** 인트로 3: 꾸벅꾸벅 잠듦(2400) → 꿈 → 지하 기차역에서 눈 뜸 */
+  intro: 6000,
+  /** 인트로 4: 역 안내판 (딩동댕동) */
+  introSign: 900,
+  /** 정답 자막 → 터널 통과 */
+  correct: 3000,
+  correctCaption: 1200,
   wrongCaption: 1200,
   heart: 700,
   heaven: 4200,
@@ -35,7 +46,14 @@ export const DURATION = {
 
 /** 장면이 끝난 뒤 나오는 대사 (클릭으로 넘김) */
 export const DIALOGUE = {
+  introChurch: ['오늘은 주일 드림가든 예배 있는 날!', '아침에는 언제나 피곤해…'],
+  introSermon: ['주일 아침 예배시간은 너무 피곤해….', '잠깐 눈 좀 붙여볼까…'],
   intro: ['…여기가 어디지? 기차역…?'],
+  introSign: [
+    '이 표지판을 보고 있다는 것은 심판자이신 하나님을 뵈러 가는 것입니다.',
+    '여러분의 삶이 천국으로 가기에 합당한지 간단한 테스트가 있을 예정입니다.',
+    '아무쪼록 좋은 결과 있기를 바랍니다.',
+  ],
   heaven: ['천국은… 진짜 있었어!', '말씀 암송 계속하고 싶다!'],
   inferno: ['헉…! 꿈이었구나…', '말씀 암송 해야겠다…'],
 } as const;
@@ -53,6 +71,10 @@ export interface Scene {
   duration: number;
   /** 있으면 duration 뒤 대사 상자 → 마지막 줄에서 클릭하면 끝 (자동 종료 없음) */
   dialogue?: readonly string[];
+  /** 대사 상자 모양 (예: 'ap-notice' 역 안내판) */
+  dialogueClass?: string;
+  /** 있으면 대사 마지막 줄 클릭 뒤 끝내지 않고 이 장면으로 이어진다 */
+  next?: () => Scene;
 }
 
 export type SfxFn = (name: SfxName) => void;
@@ -229,23 +251,82 @@ function doorSvg(): string {
   return sprite(rows, { G: '#B8860B', g: '#FFD34D' });
 }
 
-// ───────── 인트로: 깊은 꿈 → 눈 뜸 → 지하 기차역 ─────────
+// ───────── 인트로: 교회 → 설교 중 졸음 → 꿈 → 지하 기차역 → 역 안내판 ─────────
 
+/** 인트로 그림(사용자 제공 이미지)을 미리 받아 둔다 → 장면이 바뀔 때 빈 화면이 없게 */
+export function preloadImages(doc: Document): void {
+  for (const src of [churchUrl, sermonUrl]) {
+    const img = doc.createElement('img');
+    img.src = src;
+  }
+}
+
+function photo(doc: Document, cls: string, src: string, parent: HTMLElement): HTMLImageElement {
+  const img = doc.createElement('img');
+  img.className = `ap-photo ${cls}`;
+  img.src = src;
+  img.alt = '';
+  parent.appendChild(img);
+  return img;
+}
+
+function introChurchScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
+  const root = sceneRoot(doc, 'intro-church');
+  photo(doc, 'ap-church', churchUrl, root);
+  return {
+    root,
+    steps: [{ at: 300, run: () => sfx('horn') }],
+    duration: DURATION.introChurch,
+    dialogue: DIALOGUE.introChurch,
+    next: () => introSermonScene(doc, sfx, lite),
+  };
+}
+
+function introSermonScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
+  const root = sceneRoot(doc, 'intro-sermon');
+  photo(doc, 'ap-sermon', sermonUrl, root);
+  return {
+    root,
+    steps: [],
+    duration: DURATION.introSermon,
+    dialogue: DIALOGUE.introSermon,
+    next: () => introScene(doc, sfx, lite),
+  };
+}
+
+/** 설교 화면에서 눈꺼풀이 처지며 꾸벅 → 잠듦 → 꿈의 반짝임 → 지하 기차역에서 눈을 뜬다 */
 function introScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'intro');
   const station = html(doc, 'ap-station', stationSvg(), root);
+  const sermon = photo(doc, 'ap-sermon', sermonUrl, root);
+  el(doc, 'ap-vignette', root);
   const lids = eyelids(doc, root);
-  lids(0);
-  // 눈을 감은 어둠 속 꿈의 반짝임 (눈꺼풀 위에 보인다)
+  lids(1, true);
+  // 눈을 감은 어둠 속 꿈의 반짝임 (잠든 뒤 눈꺼풀 위에 보인다)
   stars(doc, root, lite ? 4 : 10, 'ap-dream');
+  const nod = el(doc, 'ap-nod', root, '꾸벅…');
+  const sleep = 2400;
   const steps: SceneStep[] = [
-    { at: 0, run: () => sfx('intro') },
-    { at: 900, run: () => lids(0.25) },
-    { at: 1400, run: () => lids(0) },
-    { at: 1800, run: () => lids(0.6) },
-    { at: 2200, run: () => lids(0.1) },
+    { at: 0, run: () => { root.classList.add('drowsy'); lids(0.55); } },
+    { at: 600, run: () => lids(0.9, true) }, // 화들짝
+    { at: 1000, run: () => lids(0.35) },
+    { at: 1400, run: () => { nod.classList.add('on'); lids(0.15); } },
+    { at: 2000, run: () => lids(0) },
     {
-      at: 2500,
+      at: sleep,
+      run: () => {
+        sermon.remove();
+        nod.remove();
+        root.classList.add('dreaming');
+        sfx('intro');
+      },
+    },
+    { at: sleep + 900, run: () => lids(0.25) },
+    { at: sleep + 1400, run: () => lids(0) },
+    { at: sleep + 1800, run: () => lids(0.6) },
+    { at: sleep + 2200, run: () => lids(0.1) },
+    {
+      at: sleep + 2500,
       run: () => {
         lids(1);
         station.classList.add('clear');
@@ -253,18 +334,58 @@ function introScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
       },
     },
   ];
-  return { root, steps, duration: DURATION.intro, dialogue: DIALOGUE.intro };
+  return { root, steps, duration: DURATION.intro, dialogue: DIALOGUE.intro, next: () => introSignScene(doc, sfx) };
+}
+
+/** 승강장에 걸린 안내판 — 안내 방송 소리와 함께 문구가 한 줄씩 (클릭으로 넘김) */
+function introSignScene(doc: Document, sfx: SfxFn): Scene {
+  const root = sceneRoot(doc, 'intro-sign');
+  html(doc, 'ap-station clear', stationSvg(), root);
+  el(doc, 'ap-dim', root);
+  return {
+    root,
+    steps: [{ at: 0, run: () => sfx('chime') }],
+    duration: DURATION.introSign,
+    dialogue: DIALOGUE.introSign,
+    dialogueClass: 'ap-notice',
+  };
 }
 
 // ───────── 정답 ─────────
 
+/** 정답! → 기차가 덜컹덜컹 터널을 지나간다 (어두워지고 벽 등이 양옆으로 스쳐 감) → 다음 문제 */
 function correctScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'correct');
   el(doc, 'ap-dim', root);
   el(doc, 'ap-flash', root);
   stars(doc, root, lite ? 8 : 18, 'ap-burst');
-  caption(doc, root, '정답!');
-  return withFade(root, [{ at: 0, run: () => sfx('correct') }], DURATION.correct);
+  const cap = caption(doc, root, '정답!');
+  const tunnel = el(doc, 'ap-tunnel');
+  tunnel.dataset.part = 'tunnel';
+  const ride = el(doc, 'ap-ride', tunnel);
+  for (let i = 0, n = lite ? 2 : 4; i < n; i++) {
+    for (const side of ['l', 'r']) vars(el(doc, `ap-tlamp ${side}`, ride), { '--delay': `${(i * 0.4) / n}s` });
+  }
+  el(doc, 'ap-tlight', tunnel);
+  const t = DURATION.correctCaption;
+  return {
+    root,
+    steps: [
+      { at: 0, run: () => sfx('correct') },
+      { at: t - 200, run: () => cap.classList.add('ap-hide') },
+      {
+        at: t,
+        run: () => {
+          cap.remove();
+          root.appendChild(tunnel);
+          sfx('rattle');
+        },
+      },
+      // 터널 끝: 다시 밝아지며 다음 문제
+      { at: DURATION.correct - 400, run: () => tunnel.classList.add('ap-exit') },
+    ],
+    duration: DURATION.correct,
+  };
 }
 
 // ───────── 하트 소멸 ─────────
@@ -444,7 +565,7 @@ function infernoScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
 export function buildScene(kind: AnimationKind, doc: Document, ctx: PlayContext, sfx: SfxFn, lite = false): Scene {
   switch (kind) {
     case 'intro':
-      return introScene(doc, sfx, lite);
+      return introChurchScene(doc, sfx, lite);
     case 'correct':
       return correctScene(doc, sfx, lite);
     case 'wrong':

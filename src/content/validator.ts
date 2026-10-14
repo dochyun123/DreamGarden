@@ -1,6 +1,7 @@
 // 담당: dream-20 — 문제 JSON 검증, 팀 등록 검증.
-import { CHOICES_PER_QUESTION, QUESTIONS_PER_SET } from '../types';
+import { CHOICES_PER_QUESTION, QUESTIONS_PER_SET, TRACK_COUNT } from '../types';
 import type { Choice, ContentFile, Question, QuestionSet, ValidationIssue } from '../types';
+import { normalizePrompt } from '../core/engine';
 import type { SetupDraft, TeamDraft } from '../core/engine';
 
 const BLANK_PATTERN = /_{3,}/;
@@ -56,12 +57,44 @@ export function parseContentFile(json: unknown): { content: ContentFile | null; 
 
 /** 팀 등록 검증: 공백 이름, 중복 이름(앞뒤 공백 무시), 팀 수가 말씀(세트) 수보다 많으면 오류 — 팀마다 서로 다른 길을 골라야 한다. */
 export function validateTeamDrafts(drafts: TeamDraft[], content: ContentFile): ValidationIssue[] {
+  return teamIssues(drafts, content.questionSets.length);
+}
+
+/**
+ * 관리 화면 저장 검증: 팀 이름(validateTeamDrafts와 같은 규칙) + 말씀 1~10개,
+ * 말씀마다 출처·구절, 문제마다 빈칸 있는 문장·보기 5칸·정답 번호.
+ */
+export function validateSetup(draft: SetupDraft): ValidationIssue[] {
+  const issues = teamIssues(draft.teamNames.map((name) => ({ name })), draft.scriptures.length);
+  const add = (location: string, message: string) => issues.push({ location, message });
+  if (draft.scriptures.length === 0) add('말씀', '말씀을 1개 이상 넣어야 합니다.');
+  if (draft.scriptures.length > TRACK_COUNT) add('말씀', `말씀은 ${TRACK_COUNT}개까지 넣을 수 있습니다.`);
+  draft.scriptures.forEach((d, i) => {
+    const location = `말씀 ${i + 1}번`;
+    if (!d.scriptureReference.trim()) add(location, '말씀 출처가 비어 있습니다.');
+    if (!d.scriptureText.trim()) add(location, '구절이 비어 있습니다.');
+    if (d.questions.length !== QUESTIONS_PER_SET) add(location, `문제가 ${QUESTIONS_PER_SET}개여야 하는데 ${d.questions.length}개입니다.`);
+    d.questions.forEach((q, qi) => {
+      const qLoc = `${location} 문제 ${qi + 1}`;
+      const prompt = normalizePrompt(q.prompt);
+      if (!prompt) add(qLoc, '문장이 비어 있습니다.');
+      else if (!BLANK_PATTERN.test(prompt)) add(qLoc, '문장에 빈칸(___)이 없습니다.');
+      const empty = q.choices.map((c, ci) => (c.trim() ? 0 : ci + 1)).filter((n) => n > 0);
+      if (q.choices.length !== CHOICES_PER_QUESTION) add(qLoc, `보기가 ${CHOICES_PER_QUESTION}개여야 합니다.`);
+      else if (empty.length) add(qLoc, `보기 ${empty.join(', ')}번이 비어 있습니다.`);
+      if (!(q.answer >= 1 && q.answer <= q.choices.length)) add(qLoc, '정답을 고르지 않았습니다.');
+    });
+  });
+  return issues;
+}
+
+function teamIssues(drafts: TeamDraft[], setCount: number): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (drafts.length === 0) issues.push({ location: '팀 등록', message: '팀을 1개 이상 등록해야 합니다.' });
-  if (drafts.length > content.questionSets.length) {
+  if (setCount > 0 && drafts.length > setCount) {
     issues.push({
       location: '팀 등록',
-      message: `팀(${drafts.length}개)이 말씀 세트(${content.questionSets.length}개)보다 많습니다. 팀마다 다른 말씀을 골라야 합니다.`,
+      message: `팀(${drafts.length}개)이 말씀(${setCount}개)보다 많습니다. 팀마다 다른 말씀을 골라야 합니다.`,
     });
   }
 
@@ -76,20 +109,6 @@ export function validateTeamDrafts(drafts: TeamDraft[], content: ContentFile): V
     } else {
       seen.set(name, i);
     }
-  });
-  return issues;
-}
-
-/** 관리 화면 저장 검증: 팀 이름(validateTeamDrafts와 같은 규칙) + 모든 갈림길의 말씀 출처·구절이 비어 있지 않은지. */
-export function validateSetup(draft: SetupDraft, content: ContentFile): ValidationIssue[] {
-  const issues = validateTeamDrafts(draft.teamNames.map((name) => ({ name })), content);
-  if (draft.scriptures.length !== content.questionSets.length) {
-    issues.push({ location: '말씀', message: `말씀이 ${content.questionSets.length}개여야 하는데 ${draft.scriptures.length}개입니다.` });
-  }
-  draft.scriptures.forEach((d, i) => {
-    const location = `말씀 ${i + 1}번`;
-    if (!d.scriptureReference.trim()) issues.push({ location, message: '말씀 출처가 비어 있습니다.' });
-    if (!d.scriptureText.trim()) issues.push({ location, message: '구절이 비어 있습니다.' });
   });
   return issues;
 }

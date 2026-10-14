@@ -109,7 +109,7 @@ describe('저장과 엔진 연동 (기획서 8장)', () => {
   it('연출 중 새로고침 → 로드 후 resumeRun 해도 점수·목숨·기록 중복 없음', () => {
     const storage = createGameStorage(memoryStorage());
     let s = selectTrack(startChallenge(gameState(), 'team-1'), 'set-1');
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       s = selectChoice(s, correct(s));
       s = completeAnimation(s, s.progress!.runId);
     }
@@ -121,7 +121,7 @@ describe('저장과 엔진 연동 (기획서 8장)', () => {
     if (loaded.kind !== 'ok') throw new Error('load failed');
     let r = resumeRun(loaded.state);
     expect(completeAnimation(r, staleRun)).toBe(r);
-    expect(r.progress).toMatchObject({ passedCount: 5, lives: 3, phase: 'correct' });
+    expect(r.progress).toMatchObject({ passedCount: 4, lives: 3, phase: 'correct' });
     r = completeAnimation(r, r.progress!.runId);
     storage.save(r); // heaven 연출 중 저장 후 다시 새로고침
     const again = storage.load();
@@ -130,7 +130,7 @@ describe('저장과 엔진 연동 (기획서 8장)', () => {
     r = completeAnimation(r, r.progress!.runId);
     expect(r.progress).toBeNull();
     expect(r.results).toHaveLength(1);
-    expect(r.results[0]).toMatchObject({ teamId: 'team-1', passedCount: 5, outcome: 'clear' });
+    expect(r.results[0]).toMatchObject({ teamId: 'team-1', passedCount: 4, outcome: 'clear' });
   });
 
   it('Undo 복원 상태도 저장 후 유지, 전체 초기화는 팀명 유지·고른 말씀 해제', () => {

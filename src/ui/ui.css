@@ -345,7 +345,9 @@ select.field { font-size: 24px; font-weight: var(--fw-regular); cursor: pointer;
 .setup__teams { flex: 1; min-height: 0; }
 .setup__main > .panel__title { flex: none; }
 
-/* 말씀 10개: 번호 | 출처 한 줄 | 구절 여러 줄 */
+/* 말씀 1~10개: 접힌 카드(번호 + 출처) → 펼치면 출처·구절 + 문제 4개 */
+.setup__head { display: flex; align-items: center; gap: 24px; flex: none; }
+.setup__hint { margin-right: auto; font-size: 22px; color: var(--c-text-dim); }
 .scripture-rows {
   flex: 1;
   min-height: 0;
@@ -355,17 +357,48 @@ select.field { font-size: 24px; font-weight: var(--fw-regular); cursor: pointer;
   gap: 12px;
   padding-right: 8px;
 }
-.scripture-row {
-  display: grid;
-  grid-template-columns: 56px 340px 1fr;
-  gap: 18px;
-  align-items: start;
-  padding: 10px 18px;
+.scripture-card {
   border: 2px solid var(--c-border);
   border-radius: var(--radius-m);
   background: var(--c-surface);
+  padding: 0 18px;
 }
-.scripture-row .team-row__num { padding-top: 8px; }
+.scripture-card[open] { border-color: var(--c-border-strong); padding-bottom: 16px; }
+.scripture-card__summary {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 18px;
+  align-items: center;
+  min-height: 72px;
+  cursor: pointer;
+  list-style: none;
+}
+.scripture-card__summary::-webkit-details-marker { display: none; }
+.scripture-card__summary::after { content: '▾'; font-size: 28px; color: var(--c-text-dim); }
+.scripture-card[open] > .scripture-card__summary::after { content: '▴'; }
+.scripture-card__ref { font-size: 30px; font-weight: var(--fw-bold); }
+.scripture-card__foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+.scripture-row {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+.q-edit {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px 18px;
+  align-items: center;
+  padding: 14px 0;
+  border-top: 2px solid var(--c-border);
+}
+.q-edit__num { font-size: 24px; font-weight: var(--fw-black); color: var(--c-accent-strong); }
+.q-edit__choices { grid-column: 2; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.q-edit__choice { display: flex; align-items: center; gap: 8px; }
+.q-edit__choice input[type='radio'] { flex: none; width: 28px; height: 28px; margin: 0; accent-color: var(--c-highlight); cursor: pointer; }
+.q-edit__choice .field { min-width: 0; height: 52px; padding: 0 12px; font-size: 24px; }
+.q-edit > .field { font-size: 24px; font-weight: var(--fw-regular); }
 .field--area {
   height: auto;
   min-height: 58px;

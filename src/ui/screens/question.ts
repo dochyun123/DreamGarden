@@ -1,6 +1,6 @@
-// 담당: dream-f4 — 문제 화면 (달리는 지하철 객차 안). 라운드·통과 수·정답은 표시하지 않는다.
+// 담당: dream-f4 — 문제 화면 (달리는 지하철 객차 안). 왼쪽 위에 몇 번째 문제인지·진행 칸, 정답은 표시하지 않는다.
 import type { GameState, Question } from '../../types';
-import { STARTING_LIVES } from '../../types';
+import { QUESTIONS_PER_SET, STARTING_LIVES } from '../../types';
 import { getCurrentQuestion } from '../../core/engine';
 import type { UiState } from '../ui';
 import type { Ctx, Screen } from '../context';
@@ -11,14 +11,14 @@ const BLANK = /_{3,}/;
 const LONG_PROMPT = 60;
 const LONG_CHOICE = 26;
 
-/** "앞 ___ 뒤" → 빈칸을 노란색+밑줄 span으로 */
+/** "앞 ___ 뒤" → 빈칸을 노란색+밑줄 span으로. 빈칸이 여럿이면 첫 빈칸이 이번 문제, 나머지는 흐리게 */
 export function renderPrompt(prompt: string): (string | HTMLElement)[] {
   const parts = prompt.split(BLANK);
   const out: (string | HTMLElement)[] = [];
   parts.forEach((part, i) => {
     if (part) out.push(part);
     if (i < parts.length - 1) {
-      out.push(h('span', { class: 'q-blank', attrs: { 'aria-label': '빈칸' } }, ' '));
+      out.push(h('span', { class: i === 0 ? 'q-blank' : 'q-blank q-blank--later', attrs: { 'aria-label': '빈칸' } }, ' '));
     }
   });
   return out;
@@ -47,6 +47,9 @@ export function createQuestionScreen(ctx: Ctx): Screen {
   const livesLabel = h('div', { class: 'q-lives__label' });
   const hearts = h('div', { class: 'q-lives__hearts' });
   const lives = h('div', { class: 'q-lives g-plate', attrs: { 'aria-live': 'polite' } }, livesLabel, hearts);
+  const roundLabel = h('div', { class: 'q-round__label' });
+  const roundBar = h('div', { class: 'q-round__bar' });
+  const round = h('div', { class: 'q-round g-plate' }, roundLabel, roundBar);
   const prompt = h('p', { class: 'q-prompt' });
   const choices = h('div', { class: 'choices', attrs: { role: 'group', 'aria-label': '보기' } });
   const fab = h(
@@ -63,7 +66,7 @@ export function createQuestionScreen(ctx: Ctx): Screen {
     'section',
     { class: `screen question${isLite() ? ' is-lite' : ''}` },
     cabBackground(),
-    h('header', { class: 'q-head' }, teamName, lives),
+    h('header', { class: 'q-head' }, round, teamName, lives),
     h('div', { class: 'q-body' }, h('div', { class: 'q-instruction' }, '빈칸에 들어갈 말을 고르세요'), prompt),
     choices,
     fab,
@@ -132,6 +135,13 @@ export function createQuestionScreen(ctx: Ctx): Screen {
     hearts.replaceChildren(...Array.from({ length: total }, (_, i) => heartIcon(i < count)));
   }
 
+  /** "문제 2 / 4" + 칸 4개 (통과한 문제만큼 채움) */
+  function renderRound(index: number, passed: number): void {
+    roundLabel.textContent = `문제 ${index + 1} / ${QUESTIONS_PER_SET}`;
+    roundBar.replaceChildren(...Array.from({ length: QUESTIONS_PER_SET }, (_, i) =>
+      h('span', { class: `q-round__cell${i < passed ? ' is-done' : i === index ? ' is-now' : ''}` })));
+  }
+
   return {
     el,
     update(s, u) {
@@ -142,6 +152,7 @@ export function createQuestionScreen(ctx: Ctx): Screen {
       const team = s.teams.find((t) => t.id === p.activeTeamId);
       teamName.textContent = team?.name ?? '';
       // 하트는 연출이 줄인다: 오답 연출 중에는 차감 전 값, 불구덩이에서는 0
+      renderRound(p.questionIndex, p.passedCount);
       renderLives(p.phase === 'wrong' ? Math.min(STARTING_LIVES, p.lives + 1) : p.phase === 'inferno' ? 0 : p.lives);
 
       const q = getCurrentQuestion(s);

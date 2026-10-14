@@ -1,9 +1,9 @@
 // 공용 타입 — 모든 모듈의 계약. 변경은 리드(dream-3c)와 합의 후에만.
 
-export const SCHEMA_VERSION = 2;
-/** 기차역 갈림길 = 문제 세트 수 (말씀 10개) */
+export const SCHEMA_VERSION = 3;
+/** 기차역 갈림길(말씀) 최대 수. 관리 화면에서 1~10개 */
 export const TRACK_COUNT = 10;
-export const QUESTIONS_PER_SET = 5;
+export const QUESTIONS_PER_SET = 4;
 export const CHOICES_PER_QUESTION = 5;
 export const STARTING_LIVES = 3;
 
@@ -26,7 +26,7 @@ export interface QuestionSet {
   id: string;
   scriptureReference: string; // 예: "요한복음 3:16"
   scriptureText: string; // 관리자 검수용으로만 표시
-  questions: Question[]; // 길이 5, 고정 순서
+  questions: Question[]; // 길이 QUESTIONS_PER_SET(4), 고정 순서
 }
 
 /** 가져오기용 JSON 파일 형식 */
@@ -52,7 +52,7 @@ export interface Team {
  * 진행 단계.
  * - choosingTrack: 기차역 갈림길에서 말씀 선택 (도전 시작 직후. 연출 없음)
  * - awaitingAnswer: 문제 대기 (보기 입력 가능한 유일한 단계)
- * - correct: 정답 연출 (끝나면 passedCount<5 → 다음 문제, =5 → heaven)
+ * - correct: 정답 연출 (끝나면 passedCount<4 → 다음 문제, =4 → heaven)
  * - wrong: 오답 자막 + 하트 소멸 연출 (끝나면 lives>0 → 같은 문제, =0 → inferno)
  * - heaven / inferno: 종료 연출 (끝나면 progress=null, 팀 선택 복귀)
  */
@@ -60,10 +60,10 @@ export type Phase = 'choosingTrack' | 'awaitingAnswer' | 'correct' | 'wrong' | '
 
 export interface Progress {
   activeTeamId: string;
-  /** 0~4. 현재 화면에 표시할 문제. 정답 연출이 끝날 때 증가한다. 완료 시 4 유지. */
+  /** 0~3. 현재 화면에 표시할 문제. 정답 연출이 끝날 때 증가한다. 완료 시 3 유지. */
   questionIndex: number;
   lives: number; // 0~3
-  passedCount: number; // 0~5
+  passedCount: number; // 0~4
   phase: Phase;
   selectedChoiceId: string | null;
   /**
@@ -75,7 +75,7 @@ export interface Progress {
 
 export interface Result {
   teamId: string;
-  passedCount: number; // 0~5
+  passedCount: number; // 0~4
   outcome: Outcome;
   completedAt: string; // ISO
 }

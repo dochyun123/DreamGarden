@@ -17,12 +17,14 @@ export function startDialogue(o: {
   doc: Document;
   parent: HTMLElement;
   lines: string[];
+  /** 상자 모양 추가 클래스 (예: 역 안내판) */
+  boxClass?: string;
   schedule: (fn: () => void, ms: number) => void;
   sfx: (name: SfxName) => void;
   onDone: () => void;
 }): Dialogue {
   const box = o.doc.createElement('div');
-  box.className = 'ap-dlg';
+  box.className = o.boxClass ? `ap-dlg ${o.boxClass}` : 'ap-dlg';
   box.dataset.part = 'dialogue';
   const text = o.doc.createElement('div');
   text.className = 'ap-dlg-text';

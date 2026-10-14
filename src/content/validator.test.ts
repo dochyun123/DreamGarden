@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import sample from '../../data/sample-content.json';
 import type { ContentFile } from '../types';
 import { parseContentFile, validateSetup, validateTeamDrafts } from './validator';
+import { scriptureDraftOf } from '../core/engine';
 
 const content = sample as ContentFile;
 const copy = (): any => JSON.parse(JSON.stringify(sample));
@@ -21,7 +22,7 @@ describe('parseContentFile', () => {
     expect(r.issues[0].location).toBe('전체');
   });
 
-  it('문제 수와 보기 수가 5개가 아니면 위치와 함께 알린다', () => {
+  it('문제 수(4)와 보기 수(5)가 맞지 않으면 위치와 함께 알린다', () => {
     const d = copy();
     d.questionSets[0].questions.pop();
     d.questionSets[1].questions[2].choices.pop();
@@ -58,9 +59,9 @@ describe('parseContentFile', () => {
 
   it('정답 id가 보기에 없으면 오류', () => {
     const d = copy();
-    d.questionSets[0].questions[4].correctChoiceId = 'nope';
+    d.questionSets[0].questions[3].correctChoiceId = 'nope';
     const r = parseContentFile(d);
-    expect(r.issues).toEqual([{ location: '세트 set-1 > 문제 5', message: expect.stringContaining('nope') }]);
+    expect(r.issues).toEqual([{ location: '세트 set-1 > 문제 4', message: expect.stringContaining('nope') }]);
   });
 
   it('빈칸 "___" 표시가 없으면 오류', () => {
@@ -116,21 +117,48 @@ describe('validateTeamDrafts', () => {
 });
 
 describe('validateSetup', () => {
-  const scriptures = content.questionSets.map((s) => ({ scriptureReference: s.scriptureReference, scriptureText: s.scriptureText }));
+  const scriptures = () => content.questionSets.map(scriptureDraftOf);
 
   it('정상 저장은 오류 없음', () => {
-    expect(validateSetup({ teamNames: ['믿음팀'], scriptures }, content)).toEqual([]);
+    expect(validateSetup({ teamNames: ['믿음팀'], scriptures: scriptures() })).toEqual([]);
   });
 
-  it('팀 이름 오류 + 빈 출처·구절 + 말씀 개수', () => {
-    const bad = scriptures.map((s, i) => (i === 2 ? { scriptureReference: ' ', scriptureText: '' } : s));
-    expect(validateSetup({ teamNames: [' '], scriptures: bad }, content)).toEqual([
+  it('팀 이름 오류 + 빈 출처·구절', () => {
+    const bad = scriptures();
+    bad[2].scriptureReference = ' ';
+    bad[2].scriptureText = '';
+    expect(validateSetup({ teamNames: [' '], scriptures: bad })).toEqual([
       { location: '팀 1번', message: expect.stringContaining('비어') },
       { location: '말씀 3번', message: expect.stringContaining('출처') },
       { location: '말씀 3번', message: expect.stringContaining('구절') },
     ]);
-    expect(validateSetup({ teamNames: ['a'], scriptures: scriptures.slice(1) }, content)).toEqual([
-      { location: '말씀', message: expect.stringContaining('개') },
+  });
+
+  it('문제: 빈칸 없음, 빈 보기, 정답 미선택. "———"는 빈칸으로 인정', () => {
+    const list = scriptures();
+    const q = list[0].questions;
+    q[0].prompt = '빈칸 없는 문장';
+    q[1].choices[1] = ' ';
+    q[1].choices[3] = '';
+    q[2].answer = 0;
+    q[3].prompt = '네 ——— 다하라';
+    expect(validateSetup({ teamNames: ['a'], scriptures: list })).toEqual([
+      { location: '말씀 1번 문제 1', message: expect.stringContaining('빈칸') },
+      { location: '말씀 1번 문제 2', message: '보기 2, 4번이 비어 있습니다.' },
+      { location: '말씀 1번 문제 3', message: expect.stringContaining('정답') },
+    ]);
+  });
+
+  it('말씀은 1~10개, 팀 수는 말씀 수 이하', () => {
+    expect(validateSetup({ teamNames: ['a'], scriptures: [] })).toEqual([
+      { location: '말씀', message: expect.stringContaining('1개 이상') },
+    ]);
+    const many = Array.from({ length: 11 }, () => scriptures()[0]);
+    expect(validateSetup({ teamNames: ['a'], scriptures: many })).toEqual([
+      { location: '말씀', message: expect.stringContaining('10개까지') },
+    ]);
+    expect(validateSetup({ teamNames: ['a', 'b', 'c'], scriptures: scriptures().slice(0, 2) })).toEqual([
+      { location: '팀 등록', message: expect.stringContaining('많습니다') },
     ]);
   });
 });
