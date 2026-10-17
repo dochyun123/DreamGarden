@@ -5,11 +5,16 @@ import { getCurrentQuestion } from '../../core/engine';
 import type { UiState } from '../ui';
 import type { Ctx, Screen } from '../context';
 import { h, setClasses } from '../dom';
-import { gearIcon, heartIcon } from '../icons';
+import { bombIcon, gearIcon, heartIcon } from '../icons';
+import { countdownBeep } from '../beep';
 
 const BLANK = /_{3,}/;
 const LONG_PROMPT = 60;
 const LONG_CHOICE = 26;
+/** 문제별 시간 제한. 다 지나면 오답과 같다 */
+export const TIME_LIMIT_MS = 20_000;
+/** 남은 시간이 이 초 이하면 빨간색 + 카운트다운 소리 */
+const WARN_SECONDS = 5;
 
 /** "앞 ___ 뒤" → 빈칸을 노란색+밑줄 span으로. 빈칸이 여럿이면 첫 빈칸이 이번 문제, 나머지는 흐리게 */
 export function renderPrompt(prompt: string): (string | HTMLElement)[] {
@@ -50,6 +55,9 @@ export function createQuestionScreen(ctx: Ctx): Screen {
   const roundLabel = h('div', { class: 'q-round__label' });
   const roundBar = h('div', { class: 'q-round__bar' });
   const round = h('div', { class: 'q-round g-plate' }, roundLabel, roundBar);
+  const timerNum = h('span', { class: 'q-timer__num' });
+  const timer = h('div', { class: 'q-timer g-plate', attrs: { role: 'timer', 'aria-label': '남은 시간' } }, bombIcon(), timerNum);
+  const reference = h('div', { class: 'q-instruction' });
   const prompt = h('p', { class: 'q-prompt' });
   const choices = h('div', { class: 'choices', attrs: { role: 'group', 'aria-label': '보기' } });
   const fab = h(
@@ -66,11 +74,74 @@ export function createQuestionScreen(ctx: Ctx): Screen {
     'section',
     { class: `screen question${isLite() ? ' is-lite' : ''}` },
     cabBackground(),
-    h('header', { class: 'q-head' }, round, teamName, lives),
-    h('div', { class: 'q-body' }, h('div', { class: 'q-instruction' }, '빈칸에 들어갈 말을 고르세요'), prompt),
+    h('header', { class: 'q-head' }, h('div', { class: 'q-left' }, round, timer), teamName, lives),
+    h('div', { class: 'q-body' }, reference, prompt),
     choices,
     fab,
   );
+
+  // ───────── 시간 제한 (폭탄) ─────────
+  /** 타이머를 시작한 문제 대기 단계의 runId. 오답 뒤 같은 문제를 다시 풀 때도 runId가 바뀌어 20초로 초기화 */
+  let timerRunId: number | null = null;
+  let remainingMs = TIME_LIMIT_MS;
+  let running = false;
+  let lastTick = 0;
+  let shownSec = -1;
+  let tickHandle: ReturnType<typeof setInterval> | undefined;
+
+  function renderTimer(): void {
+    const sec = Math.max(0, Math.ceil(remainingMs / 1000));
+    if (sec === shownSec) return;
+    const prev = shownSec;
+    shownSec = sec;
+    timerNum.textContent = String(sec);
+    timer.classList.toggle('is-warn', sec <= WARN_SECONDS);
+    // 실제로 1초씩 줄어들 때만 소리 (처음 그릴 때·일시정지 해제 때는 X)
+    if (running && prev === sec + 1 && sec <= WARN_SECONDS) countdownBeep(sec === 0);
+  }
+
+  function tick(): void {
+    if (!el.isConnected) { stopTimer(); return; } // 다른 화면으로 바뀌었다
+    const now = performance.now();
+    remainingMs -= now - lastTick;
+    lastTick = now;
+    renderTimer();
+    if (remainingMs <= 0 && timerRunId !== null) {
+      const runId = timerRunId;
+      stopTimer();
+      ctx.actions.timeOut(runId);
+    }
+  }
+
+  function startTimer(): void {
+    if (running) return;
+    running = true;
+    lastTick = performance.now();
+    tickHandle = setInterval(tick, 100);
+  }
+
+  function stopTimer(): void {
+    running = false;
+    clearInterval(tickHandle);
+  }
+
+  function syncTimer(s: GameState, u: UiState): void {
+    const p = s.progress;
+    if (!p || p.phase !== 'awaitingAnswer' || !getCurrentQuestion(s)) {
+      stopTimer(); // 판정·연출 중에는 멈춘 숫자 그대로
+      return;
+    }
+    if (timerRunId !== p.runId) {
+      stopTimer();
+      timerRunId = p.runId;
+      remainingMs = TIME_LIMIT_MS;
+      shownSec = -1;
+    }
+    renderTimer();
+    const paused = !u.started || u.adminMenuOpen || u.introPlaying || u.view !== 'question';
+    if (paused) stopTimer();
+    else startTimer();
+  }
 
   function isOpen(): boolean {
     const p = state?.progress;
@@ -151,6 +222,7 @@ export function createQuestionScreen(ctx: Ctx): Screen {
       if (!p) return;
       const team = s.teams.find((t) => t.id === p.activeTeamId);
       teamName.textContent = team?.name ?? '';
+      reference.textContent = s.questionSets.find((qs) => qs.id === team?.questionSetId)?.scriptureReference ?? '';
       // 하트는 연출이 줄인다: 오답 연출 중에는 차감 전 값, 불구덩이에서는 0
       renderRound(p.questionIndex, p.passedCount);
       renderLives(p.phase === 'wrong' ? Math.min(STARTING_LIVES, p.lives + 1) : p.phase === 'inferno' ? 0 : p.lives);
@@ -173,6 +245,7 @@ export function createQuestionScreen(ctx: Ctx): Screen {
       // 연타는 phase로 막히고, 거부된 선택(저장 실패 등)은 여기서 풀려 다시 고를 수 있다.
       ctx.local.lock = null;
       applyChoiceState();
+      syncTimer(s, u);
 
       setClasses(fab, { 'is-alert': u.animationStuck, 'has-notice': !!u.notice && !u.animationStuck });
       fab.setAttribute('aria-label', u.animationStuck ? '관리 메뉴 — 연출 건너뛰기 필요' : '관리 메뉴');

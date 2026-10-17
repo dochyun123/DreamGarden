@@ -82,8 +82,8 @@ export function playSfx(ctx: AudioContext, out: AudioNode, name: SfxName): void 
     case 'chime': // 역 안내 방송 "딩동댕동"
       melody(ctx, out, [[E5, 0.32], [C5, 0.32], [D5, 0.32], [G4, 0.6]], 'triangle', 0.2);
       break;
-    case 'rattle': // 기차 "덜컹덜컹" — 낮은 쿵 두 번씩 네 마디
-      for (let i = 0; i < 4; i++) {
+    case 'rattle': // 기차 "덜컹덜컹" — 낮은 쿵 두 번씩 다섯 마디 (터널 달리는 동안)
+      for (let i = 0; i < 5; i++) {
         note(ctx, out, { type: 'triangle', freq: 85, freqEnd: 60, at: i * 0.42, dur: 0.07, gain: 0.35 });
         note(ctx, out, { type: 'triangle', freq: 75, freqEnd: 50, at: i * 0.42 + 0.13, dur: 0.07, gain: 0.3 });
         note(ctx, out, { freq: B4 * 2, at: i * 0.42, dur: 0.02, gain: 0.02 });

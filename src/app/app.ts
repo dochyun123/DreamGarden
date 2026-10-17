@@ -100,6 +100,11 @@ export function bootstrap(root: HTMLElement): void {
       commit(engine.selectChoice(state, choiceId));
       update();
     },
+    timeOut(runId) {
+      if (!ui.started || ui.adminMenuOpen || ui.view !== 'question') return;
+      commit(engine.timeOut(state, runId));
+      update();
+    },
     openAdminMenu() {
       ui.adminMenuOpen = true;
       update();

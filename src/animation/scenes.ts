@@ -22,6 +22,7 @@ import {
 import type { SfxName } from './sfx';
 import churchUrl from './assets/church.jpg?url';
 import sermonUrl from './assets/sermon.jpg?url';
+import cabUrl from '../ui/assets/game-bg.png?url';
 
 /**
  * 장면 길이(ms). intro/heaven/inferno는 이 시간 뒤 대사 상자가 나오고, 클릭할 때까지 기다린다.
@@ -31,12 +32,12 @@ export const DURATION = {
   introChurch: 1400,
   /** 인트로 2: 전도사님 설교 */
   introSermon: 1000,
-  /** 인트로 3: 꾸벅꾸벅 잠듦(2400) → 꿈 → 지하 기차역에서 눈 뜸 */
+  /** 인트로 3: 눈꺼풀이 감기며 잠듦(2400) → 꿈 → 지하 기차역에서 눈 뜸 */
   intro: 6000,
   /** 인트로 4: 역 안내판 (딩동댕동) */
   introSign: 900,
-  /** 정답 자막 → 터널 통과 */
-  correct: 3000,
+  /** 정답 자막 → 운전석 시점으로 터널 속을 덜컹덜컹 달려 나간다 */
+  correct: 3400,
   correctCaption: 1200,
   wrongCaption: 1200,
   heart: 700,
@@ -176,20 +177,6 @@ function stationSvg(): string {
   return rectsSvg(160, 90, r, 'ap-bg', 'slice', sign);
 }
 
-/** 내 방 천장 (악몽에서 깼을 때) */
-function ceilingSvg(): string {
-  const r: Rect[] = [];
-  for (let y = 0, i = 0; y < 90; y += 10, i++) {
-    r.push([0, y, 160, 10, i % 2 ? '#BC8F5E' : '#C99D6B'], [0, y + 9, 160, 1, '#8E6640']);
-    for (let x = i % 2 ? 30 : 70; x < 160; x += 80) r.push([x, y, 1, 9, '#A47A4E']);
-  }
-  r.push([0, 40, 160, 6, '#7A5332'], [0, 40, 160, 1, '#946742']); // 들보
-  for (let i = 0; i < 8; i++) r.push([98 + i * 3, 50 + i * 4, 34, 4, 'rgba(255,240,190,.3)']); // 창문 햇빛
-  r.push([79, 0, 2, 18, '#3A2A1E'], [72, 18, 16, 2, '#E7D9B5'], [70, 20, 20, 2, '#E7D9B5'], [68, 22, 24, 3, '#D8C79E']);
-  r.push([77, 25, 6, 3, '#FFF6C8']);
-  return rectsSvg(160, 90, r, 'ap-bg', 'slice');
-}
-
 /**
  * 추락하는 벽돌 우물 160×102 — 12칸(벽돌 두 줄)마다 무늬가 반복되므로
  * CSS가 12칸만큼 위로 올렸다가 되돌리면 끝없이 떨어지는 것처럼 보인다.
@@ -294,7 +281,7 @@ function introSermonScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   };
 }
 
-/** 설교 화면에서 눈꺼풀이 처지며 꾸벅 → 잠듦 → 꿈의 반짝임 → 지하 기차역에서 눈을 뜬다 */
+/** 설교 화면에서 눈꺼풀이 처지며 → 잠듦 → 꿈의 반짝임 → 지하 기차역에서 눈을 뜬다 */
 function introScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'intro');
   const station = html(doc, 'ap-station', stationSvg(), root);
@@ -304,19 +291,17 @@ function introScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   lids(1, true);
   // 눈을 감은 어둠 속 꿈의 반짝임 (잠든 뒤 눈꺼풀 위에 보인다)
   stars(doc, root, lite ? 4 : 10, 'ap-dream');
-  const nod = el(doc, 'ap-nod', root, '꾸벅…');
   const sleep = 2400;
   const steps: SceneStep[] = [
     { at: 0, run: () => { root.classList.add('drowsy'); lids(0.55); } },
     { at: 600, run: () => lids(0.9, true) }, // 화들짝
     { at: 1000, run: () => lids(0.35) },
-    { at: 1400, run: () => { nod.classList.add('on'); lids(0.15); } },
+    { at: 1400, run: () => lids(0.15) },
     { at: 2000, run: () => lids(0) },
     {
       at: sleep,
       run: () => {
         sermon.remove();
-        nod.remove();
         root.classList.add('dreaming');
         sfx('intro');
       },
@@ -353,7 +338,13 @@ function introSignScene(doc: Document, sfx: SfxFn): Scene {
 
 // ───────── 정답 ─────────
 
-/** 정답! → 기차가 덜컹덜컹 터널을 지나간다 (어두워지고 벽 등이 양옆으로 스쳐 감) → 다음 문제 */
+/** 터널 속 물체(테두리·침목·벽 등)가 소실점에서 튀어나와 다가오는 한 바퀴 시간(초) — styles.ts ap-depth와 같게 */
+const DEPTH_CYCLE = 0.6;
+
+/**
+ * 정답! → 운전석은 그대로 덜컹거리고, 앞 유리창 너머 터널만 달려온다 → 다음 문제.
+ * 출발할 때 몸이 뒤로 쏠렸다가(lurch) 터널 테두리·침목·벽 등이 소실점에서 점점 빨라지며 스쳐 간다
+ */
 function correctScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'correct');
   el(doc, 'ap-dim', root);
@@ -362,11 +353,20 @@ function correctScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const cap = caption(doc, root, '정답!');
   const tunnel = el(doc, 'ap-tunnel');
   tunnel.dataset.part = 'tunnel';
-  const ride = el(doc, 'ap-ride', tunnel);
-  for (let i = 0, n = lite ? 2 : 4; i < n; i++) {
-    for (const side of ['l', 'r']) vars(el(doc, `ap-tlamp ${side}`, ride), { '--delay': `${(i * 0.4) / n}s` });
-  }
-  el(doc, 'ap-tlight', tunnel);
+  // 출발 쏠림과 덜컹거림은 transform이 겹치지 않게 감싸는 요소를 나눈다
+  const ride = el(doc, 'ap-ride', el(doc, 'ap-lurch', tunnel));
+  // 문제 화면과 같은 운전석 그림은 제자리, 유리창 안쪽만 같은 그림을 확대하며 달려 나간다
+  const cab = el(doc, 'ap-cab', ride);
+  const view = el(doc, 'ap-view', ride);
+  const far = el(doc, 'ap-cab ap-far', view);
+  cab.style.backgroundImage = far.style.backgroundImage = `url("${cabUrl}")`;
+  // 음수 지연: 터널이 나타나는 순간부터 물체가 이미 줄지어 다가오고 있도록
+  const depth = (cls: string, n: number) => {
+    for (let i = 0; i < n; i++) vars(el(doc, `ap-depth ${cls}`, view), { '--delay': `${(-i * DEPTH_CYCLE) / n}s` });
+  };
+  if (!lite) depth('ap-tie', 6);
+  depth('ap-ring', lite ? 2 : 3);
+  depth('ap-tlamp', lite ? 2 : 4);
   const t = DURATION.correctCaption;
   return {
     root,
@@ -381,8 +381,6 @@ function correctScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
           sfx('rattle');
         },
       },
-      // 터널 끝: 다시 밝아지며 다음 문제
-      { at: DURATION.correct - 400, run: () => tunnel.classList.add('ap-exit') },
     ],
     duration: DURATION.correct,
   };
@@ -445,7 +443,7 @@ function wrongScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
 
 // ───────── 천국 (픽셀 하늘 · 구름 · 빛 · 문이 열림) → 대사 ─────────
 
-function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean): Scene {
+function heavenScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'heaven');
   html(doc, 'ap-sky', skySvg(), root);
   const rays = el(doc, 'ap-rays', root);
@@ -480,22 +478,14 @@ function heavenScene(doc: Document, ctx: PlayContext, sfx: SfxFn, lite: boolean)
     {
       at: 2400,
       run: () => {
-        const cap = caption(doc, root, '천국 입성!');
-        const ref = ctx.scriptureReference?.trim();
-        if (ref) {
-          const verse = doc.createElement('span');
-          verse.className = 'ap-verse';
-          verse.dataset.part = 'verse';
-          verse.textContent = ref;
-          cap.appendChild(verse);
-        }
+        caption(doc, root, '천국 입성!');
       },
     },
   ];
   return { root, steps, duration: DURATION.heaven, dialogue: DIALOGUE.heaven };
 }
 
-// ───────── 불구덩이 (추락 → 불꽃 → 흔들리며 암전 → 악몽에서 깸) → 대사 ─────────
+// ───────── 불구덩이 (추락 → 불꽃 → 흔들리며 암전 → 설교 시간에 번쩍 깸) → 대사 ─────────
 
 function infernoScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
   const root = sceneRoot(doc, 'inferno');
@@ -518,7 +508,8 @@ function infernoScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
     vars(e, { '--x': `${randi(3, 97)}%`, '--d': `${rand(0.9, 1.6).toFixed(2)}s`, '--delay': `${rand(0, 1).toFixed(2)}s` });
   }
   const black = el(doc, 'ap-black', root);
-  const room = html(doc, 'ap-room', ceilingSvg());
+  const room = el(doc, 'ap-room');
+  photo(doc, 'ap-sermon', sermonUrl, room);
   let lids: ReturnType<typeof eyelids> | null = null;
   const steps: SceneStep[] = [
     { at: 0, run: () => sfx('fall') },
@@ -541,7 +532,7 @@ function infernoScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
     {
       at: 3500,
       run: () => {
-        // 암전 속에서 방 장면 준비 → 눈을 번쩍 뜬다
+        // 암전 속에서 설교 장면 준비 → 눈을 번쩍 뜬다 (꿈이었다)
         shake.remove();
         black.remove();
         root.appendChild(room);
@@ -571,7 +562,7 @@ export function buildScene(kind: AnimationKind, doc: Document, ctx: PlayContext,
     case 'wrong':
       return wrongScene(doc, ctx, sfx);
     case 'heaven':
-      return heavenScene(doc, ctx, sfx, lite);
+      return heavenScene(doc, sfx, lite);
     case 'inferno':
       return infernoScene(doc, sfx, lite);
   }

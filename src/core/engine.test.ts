@@ -3,7 +3,7 @@ import sample from '../../data/sample-content.json';
 import type { ContentFile, GameState } from '../types';
 import {
   availableSetIds, completeAnimation, createInitialState, emptyScriptureDraft, saveSetup, scriptureDraftOf, getCurrentQuestion, lastUndoLabel, registerTeams,
-  replaceContent, resetRecords, resumeRun, selectChoice, selectTrack, startChallenge, undo,
+  replaceContent, resetRecords, resumeRun, selectChoice, selectTrack, startChallenge, timeOut, undo,
 } from './engine';
 
 const content = sample as ContentFile;
@@ -201,6 +201,25 @@ describe('기획서 8장 검수 기준', () => {
     for (let i = 0; i < 3; i++) s = answer(s, wrongId(s));
     expect(s.results).toEqual([expect.objectContaining({ teamId: 'team-1', passedCount: 2, outcome: 'failed' })]);
     expect(s.teams[0].status).toBe('completed');
+  });
+
+  it('시간 초과는 오답과 같다: 목숨 차감, 선택 없음, 되돌리기 가능, 늦은 타이머(runId 불일치)는 무시', () => {
+    const s0 = begin(setup(), 'team-1');
+    expect(timeOut(s0, s0.progress!.runId - 1)).toBe(s0);
+    const s1 = timeOut(s0, s0.progress!.runId);
+    expect(s1.progress).toMatchObject({ phase: 'wrong', lives: 2, passedCount: 0, selectedChoiceId: null });
+    expect(lastUndoLabel(s1)).toBe('팀1 1번 문제 시간 초과');
+    expect(timeOut(s1, s1.progress!.runId)).toBe(s1);
+    // 세 번 시간 초과 → inferno, failed 기록
+    let s = s0;
+    for (let i = 0; i < 3; i++) {
+      s = timeOut(s, s.progress!.runId);
+      if (i < 2) s = completeAnimation(s, s.progress!.runId);
+    }
+    expect(s.progress!.phase).toBe('wrong');
+    expect(s.results).toHaveLength(1);
+    expect(s.results[0].outcome).toBe('failed');
+    expect(undo(s1).progress).toMatchObject({ phase: 'awaitingAnswer', lives: 3 });
   });
 
   it('같은 오답을 다시 선택하면 목숨을 다시 차감한다', () => {

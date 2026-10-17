@@ -57,9 +57,6 @@ export const CSS = `
   background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.55) 65%,#000 100%)}
 .ap-intro.drowsy .ap-vignette{opacity:1}
 .ap-intro.dreaming .ap-vignette{opacity:0;transition:none}
-.ap-nod{position:absolute;left:0;right:0;top:50%;margin-top:-4cqh;text-align:center;font-size:7cqh;line-height:8cqh;color:#fff;z-index:2;
-  text-shadow:${OUTLINE('.6cqh')};visibility:hidden}
-.ap-nod.on{visibility:visible;animation:ap-nod .8s steps(4) both}
 .ap-intro .ap-dream{visibility:hidden}
 .ap-intro.dreaming .ap-dream{visibility:visible}
 .ap-station{position:absolute;inset:0;filter:blur(1.6cqh) brightness(.45) saturate(.4);transition:filter 1s steps(5)}
@@ -82,14 +79,28 @@ export const CSS = `
 .ap-correct .ap-flash{background:#FFF3B0}
 .ap-correct .ap-big{--cap:#FFE066;--o:#5A3A00}
 
-/* 터널 통과: 어둠 속에서 벽 등이 가운데서 양옆으로 스쳐 가고, 기차가 덜컹거린다. 끝에 출구 빛 */
+/* 터널 통과: 운전석(문제 화면 배경)은 제자리에서 덜컹거리고, 앞 유리창 안쪽만 같은 그림이 소실점으로 빨려 들어가며
+   터널 테두리·침목·벽 등이 원근(1/z)대로 점점 빨라지며 스쳐 간다.
+   유리창 자르기·소실점 %는 game-bg.png(1536×1024)를 .ap-ride 상자(16:9 화면 기준 104cqw×106cqh)에
+   cover, center 70%로 깔았을 때의 값: 유리창 x 28.8~80.6%, y 5~76.6%, 소실점 54% 42% */
 .ap-tunnel{position:absolute;inset:0;background:#07060F;animation:ap-fade-in .3s steps(3) both}
-.ap-ride{position:absolute;inset:0;animation:ap-rattle .42s steps(1,end) infinite}
-.ap-tlamp{position:absolute;top:44%;left:50%;width:2cqw;height:1cqh;background:#FFE7A0;
-  box-shadow:0 0 0 .6cqh rgba(255,220,140,.25);animation:ap-lamp-l .4s linear var(--delay) infinite}
-.ap-tlamp.r{animation-name:ap-lamp-r}
-.ap-tlight{position:absolute;left:50%;top:46%;width:0;height:0;background:#FFF6D8;opacity:0}
-.ap-tunnel.ap-exit .ap-tlight{animation:ap-exit .4s steps(5) both}
+.ap-lurch{position:absolute;inset:0;transform-origin:54% 42%;animation:ap-lurch .5s steps(5) both}
+.ap-ride{position:absolute;inset:-3cqh -2cqw;animation:ap-rattle .42s steps(1,end) infinite}
+.ap-cab{position:absolute;inset:0;background:#07060F center 70%/cover no-repeat;image-rendering:pixelated}
+.ap-cab::after{content:'';position:absolute;inset:0;background:rgba(8,7,26,.3)}
+.ap-view{position:absolute;inset:0;overflow:hidden;clip-path:inset(5% 19.4% 23.4% 28.8% round 2cqw)}
+.ap-far{transform-origin:54% 42%;animation:ap-forward 1.8s cubic-bezier(.5,0,1,.5) both}
+.ap-far::after{background:rgba(8,7,26,.45)}
+/* 소실점에 놓인 터널 단면 상자: 크기가 1/z로 커지며 다가온다. 테두리=터널 테두리, 바닥=침목, 양 벽=등 */
+.ap-depth{position:absolute;left:54%;top:42%;width:30cqw;height:42cqh;opacity:0;
+  animation:ap-depth .6s linear var(--delay) infinite}
+.ap-ring{border:.7cqh solid rgba(190,170,130,.35);border-bottom:none}
+.ap-tie::after{content:'';position:absolute;left:30%;right:30%;bottom:0;height:3%;background:#6B4A30;
+  box-shadow:0 .4cqh 0 #2A1C14}
+.ap-tlamp::before,.ap-tlamp::after{content:'';position:absolute;top:22%;width:5%;height:3%;background:#FFE7A0;
+  box-shadow:0 0 0 .5cqh rgba(255,220,140,.25)}
+.ap-tlamp::before{left:2%}
+.ap-tlamp::after{right:2%}
 
 /* 오답 */
 .ap-wrong .ap-flash{background:#E8343F}
@@ -127,8 +138,6 @@ export const CSS = `
 .ap-cloud{position:absolute;bottom:-3cqh;left:var(--x);width:var(--w);animation:ap-rise-in .8s steps(4) var(--delay) both}
 .ap-heaven .ap-caption{top:3cqh;transform:none}
 .ap-heaven .ap-big{font-size:9cqh;--cap:#FFE066;--o:#7A4A00;text-shadow:${OUTLINE('.6cqh')},0 1cqh 0 rgba(0,0,0,.3)}
-.ap-verse{display:block;margin-top:1cqh;font-size:6cqh;color:#fff;--o:#1D3A6E;text-shadow:${OUTLINE('.5cqh')};
-  animation:ap-pop .4s steps(4) .2s both}
 
 /* 불구덩이 */
 .ap-inferno{background:#000}
@@ -147,7 +156,8 @@ export const CSS = `
   animation:ap-ember var(--d) steps(8) var(--delay) infinite}
 .ap-black{position:absolute;inset:0;background:#000;opacity:0}
 .ap-black.on{animation:ap-fade-in .6s steps(4) both}
-.ap-room{position:absolute;inset:0}
+.ap-room{position:absolute;inset:0;background:#000}
+.ap-room .ap-sermon{object-position:50% 45%}
 .ap-room.jolt{animation:ap-shake .3s steps(1,end) 2}
 
 /* 대사 상자 (스타듀밸리풍) */
@@ -183,11 +193,15 @@ export const CSS = `
 @keyframes ap-flick{0%{transform:none}50%{transform:scaleX(-1) scaleY(1.1)}}
 @keyframes ap-zoom{from{transform:scale(1)}to{transform:scale(1.08)}}
 @keyframes ap-drowsy{from{filter:none}to{filter:blur(.8cqh) brightness(.6) saturate(.6)}}
-@keyframes ap-nod{0%{transform:translateY(-2cqh);opacity:0}50%{transform:translateY(1cqh);opacity:1}100%{transform:none;opacity:1}}
-@keyframes ap-rattle{0%{transform:none}30%{transform:translateY(.8cqh)}45%{transform:none}60%{transform:translateY(.5cqh)}75%{transform:none}}
-@keyframes ap-lamp-l{from{transform:translate(-1cqw,0) scale(.3)}to{transform:translate(-60cqw,-30cqh) scale(4);opacity:.9}}
-@keyframes ap-lamp-r{from{transform:translate(-1cqw,0) scale(.3)}to{transform:translate(58cqw,-30cqh) scale(4);opacity:.9}}
-@keyframes ap-exit{from{opacity:.4;left:47%;top:43%;width:6%;height:6%}to{opacity:1;left:0;top:0;width:100%;height:100%}}
+/* 덜컹-덜컹: sfx 'rattle'의 쿵(0s, 0.13s / 0.42s 주기)에 맞춰 0%·31%에 튄다 */
+@keyframes ap-rattle{0%{transform:translateY(1.6cqh)}8%{transform:translateY(.4cqh)}16%{transform:none}31%{transform:translate(.4cqw,1.1cqh)}39%{transform:translateY(.3cqh)}47%{transform:none}}
+@keyframes ap-lurch{0%{transform:none}30%{transform:scale(.985) translateY(-.6cqh)}70%{transform:scale(1.015)}100%{transform:none}}
+@keyframes ap-forward{from{transform:scale(1)}to{transform:scale(1.35)}}
+/* z가 1→0.025로 일정하게 줄 때 크기 0.1/z — 멀리선 느리고 가까이 오면 확 스쳐 간다 */
+@keyframes ap-depth{0%{transform:translate(-50%,-50%) scale(.1);opacity:0}25%{opacity:1}
+  50%{transform:translate(-50%,-50%) scale(.2)}75%{transform:translate(-50%,-50%) scale(.37)}
+  87.5%{transform:translate(-50%,-50%) scale(.68)}94%{transform:translate(-50%,-50%) scale(1.2)}
+  100%{transform:translate(-50%,-50%) scale(4);opacity:1}}
 @keyframes ap-ember{from{transform:none;opacity:1}to{transform:translateY(-60cqh);opacity:0}}
 `;
 

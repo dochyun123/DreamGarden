@@ -178,7 +178,24 @@ export function selectChoice(state: GameState, choiceId: string): GameState {
   if (!team) return state;
 
   const label = `${team.name} ${progress.questionIndex + 1}번 문제에 ${choiceIndex + 1}번 선택`;
-  const isCorrect = choiceId === question.correctChoiceId;
+  return judge(state, choiceId === question.correctChoiceId, choiceId, label);
+}
+
+/**
+ * 시간 초과 — 오답과 똑같이 처리한다 (selectedChoiceId=null).
+ * runId가 현재 문제 대기 단계와 다르면(늦게 도착한 타이머) 무시.
+ */
+export function timeOut(state: GameState, runId: number): GameState {
+  const progress = state.progress;
+  if (!progress || progress.phase !== 'awaitingAnswer' || progress.runId !== runId) return state;
+  const team = state.teams.find((t) => t.id === progress.activeTeamId);
+  if (!team || !getCurrentQuestion(state)) return state;
+  return judge(state, false, null, `${team.name} ${progress.questionIndex + 1}번 문제 시간 초과`);
+}
+
+function judge(state: GameState, isCorrect: boolean, choiceId: string | null, label: string): GameState {
+  const progress = state.progress!;
+  const team = state.teams.find((t) => t.id === progress.activeTeamId)!;
   const passedCount = isCorrect ? progress.passedCount + 1 : progress.passedCount;
   const lives = isCorrect ? progress.lives : Math.max(0, progress.lives - 1);
   const finished = isCorrect ? passedCount >= QUESTIONS_PER_SET : lives === 0;

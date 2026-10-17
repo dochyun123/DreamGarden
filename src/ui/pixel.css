@@ -251,20 +251,13 @@
 
 /* ───────── 문제 화면: 운전석에서 내다본 지하 터널 (사용자 그림) ─────────
    game-bg.png(1536×1024)를 cover → 1.25배(1920×1280). 남는 200px은 위 천장에서 140px, 아래에서 60px 자른다.
-   전체를 30% 어둡게 덮어 문제·보기 판 뒤를 차분하게. 움직임: 아주 약한 흔들림 + 가끔 창을 스치는 빛. ?lite=1이면 정지. */
+   전체를 30% 어둡게 덮어 문제·보기 판 뒤를 차분하게. 문제를 푸는 동안 흔들리지 않는다 (가끔 창을 스치는 빛만). ?lite=1이면 빛도 없음. */
 .question { padding: 56px var(--gutter) 64px; box-sizing: border-box; background: var(--c-bg-deep); }
 .cab {
   position: absolute;
   inset: -4px; /* 흔들려도 가장자리가 비지 않게 */
   overflow: hidden;
   pointer-events: none;
-  animation: cab-sway 4.8s steps(1) infinite;
-}
-@keyframes cab-sway {
-  0%, 100% { transform: translate(0, 0); }
-  25% { transform: translate(0, 2px); }
-  50% { transform: translate(2px, 3px); }
-  75% { transform: translate(0, 1px); }
 }
 .cab__view {
   position: absolute;
@@ -293,7 +286,6 @@
   0%, 88% { left: -360px; }
   100% { left: 1200px; }
 }
-.question.is-lite .cab { animation: none; }
 .question.is-lite .cab__glint { display: none; }
 
 .q-head { position: relative; z-index: 1; flex: none; height: 200px; margin: 0 -40px; display: flex; justify-content: center; align-items: flex-start; }
@@ -301,12 +293,22 @@
 .q-lives { position: absolute; right: 50px; top: 8px; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px 24px 18px; }
 .q-lives__label { font-size: 28px; color: var(--c-text-dim); }
 .q-lives__hearts { display: flex; gap: 18px; }
-.q-round { position: absolute; left: 50px; top: 8px; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 14px 24px 20px; }
+.q-left { position: absolute; left: 50px; top: 8px; display: flex; align-items: stretch; gap: 20px; }
+.q-round { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 14px 24px 20px; }
 .q-round__label { font-size: 34px; }
 .q-round__bar { display: flex; gap: 8px; }
 .q-round__cell { width: 44px; height: 22px; background: var(--c-heart-empty); box-shadow: 4px 4px 0 var(--c-px-line); }
 .q-round__cell.is-now { background: var(--c-text-faint); }
 .q-round__cell.is-done { background: var(--c-highlight); }
+/* 시간 제한 폭탄: 남은 초. 5초 이하면 빨간색으로 깜빡 */
+.q-timer { display: flex; align-items: center; gap: 14px; padding: 14px 24px; }
+.q-timer .bomb { width: 60px; height: 60px; filter: drop-shadow(4px 4px 0 var(--c-px-line)); }
+.q-timer__num { min-width: 2ch; font-size: 56px; line-height: 1; text-align: right; font-variant-numeric: tabular-nums; }
+.q-timer.is-warn { color: var(--c-danger); --px-edge: var(--c-danger); }
+.q-timer.is-warn .q-timer__num { animation: q-timer-warn 1s steps(1) infinite; }
+.q-timer.is-warn .bomb { animation: q-timer-shake 0.3s steps(1) infinite; }
+@keyframes q-timer-warn { 50% { color: #fff; } }
+@keyframes q-timer-shake { 50% { transform: translateX(3px); } }
 .heart {
   width: 54px; height: 48px;
   display: block;
@@ -327,7 +329,7 @@
   box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.3), inset 4px 4px 0 rgba(255, 255, 255, 0.06),
     0 -4px 0 var(--c-px-line), 0 4px 0 var(--c-px-line), -4px 0 0 var(--c-px-line), 4px 0 0 var(--c-px-line), 0 12px 0 rgba(0, 0, 0, 0.4);
 }
-.q-instruction { font-family: var(--font-pixel); font-weight: var(--fw-bold); font-size: 34px; color: var(--c-text-dim); text-shadow: 4px 4px 0 var(--c-px-line); }
+.q-instruction { font-family: var(--font-pixel); font-weight: var(--fw-bold); font-size: 40px; color: var(--c-highlight); text-shadow: 4px 4px 0 var(--c-px-line); }
 .q-prompt {
   margin: 0;
   max-width: 1600px;

@@ -386,55 +386,22 @@ describe('픽셀아트', () => {
     expect(host.querySelector('.ap-gate.open')).not.toBeNull();
   });
 
-  it('불구덩이 끝에는 방 천장에서 눈을 번쩍 뜬다', async () => {
+  it('불구덩이 끝에는 설교 시간(sermon.jpg)으로 돌아와 눈을 번쩍 뜬다', async () => {
     track(player.play('inferno', ctx));
     video()!.dispatchEvent(new Event('error'));
     await vi.advanceTimersByTimeAsync(DURATION.inferno);
-    expect(host.querySelector('.ap-room')).not.toBeNull();
+    expect(host.querySelector('.ap-room .ap-sermon')).not.toBeNull();
     expect(host.querySelector('.ap-fire')).toBeNull();
   });
 });
 
-describe('천국 말씀 구절', () => {
-  const heavenCtx = { teamName: '믿음팀', livesBefore: 2, livesAfter: 2 };
-
-  it('scriptureReference가 있으면 천국 자막 아래에 표시', async () => {
-    track(player.play('heaven', { ...heavenCtx, scriptureReference: '요한복음 3:16' }));
+describe('천국 자막', () => {
+  it('천국 입성! 아래에 말씀 구절을 표시하지 않는다', async () => {
+    track(player.play('heaven', { teamName: '믿음팀', livesBefore: 2, livesAfter: 2, scriptureReference: '요한복음 3:16' }));
     video()!.dispatchEvent(new Event('error'));
-    await vi.advanceTimersByTimeAsync(2399);
-    expect(host.querySelector('[data-part="verse"]')).toBeNull();
-    await vi.advanceTimersByTimeAsync(1);
-    const verse = host.querySelector('[data-part="verse"]')!;
-    expect(verse.textContent).toBe('요한복음 3:16');
-    expect(verse.previousElementSibling?.textContent).toBe('천국 입성!');
-  });
-
-  it('없거나 빈 문자열이면 표시하지 않는다', async () => {
-    for (const ref of [undefined, '', '   ']) {
-      const t = track(player.play('heaven', { ...heavenCtx, scriptureReference: ref }));
-      video()?.dispatchEvent(new Event('error'));
-      await vi.advanceTimersByTimeAsync(DURATION.heaven);
-      expect(host.textContent).toContain('천국 입성!');
-      expect(host.querySelector('[data-part="verse"]')).toBeNull();
-      await clickThrough(DIALOGUE.heaven);
-      expect(t.result).toBe('ended');
-    }
-  });
-
-  it('정답·오답·불구덩이에는 표시하지 않고, textContent로만 넣는다', async () => {
-    const withRef = { ...heavenCtx, livesAfter: 0, livesBefore: 1, scriptureReference: '<b>요한복음 3:16</b>' };
-    for (const kind of ['correct', 'wrong', 'inferno'] as const) {
-      track(player.play(kind, withRef));
-      video()?.dispatchEvent(new Event('error'));
-      await vi.advanceTimersByTimeAsync(4900);
-      expect(host.textContent).not.toContain('요한복음');
-      player.cancel();
-    }
-    track(player.play('heaven', withRef));
-    video()?.dispatchEvent(new Event('error'));
-    await vi.advanceTimersByTimeAsync(2400);
-    expect(host.querySelector('b')).toBeNull();
-    expect(host.querySelector('[data-part="verse"]')!.textContent).toBe('<b>요한복음 3:16</b>');
+    await vi.advanceTimersByTimeAsync(DURATION.heaven);
+    expect(host.textContent).toContain('천국 입성!');
+    expect(host.textContent).not.toContain('요한복음');
   });
 });
 

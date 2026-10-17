@@ -102,6 +102,7 @@ const actions: UiActions = {
       update();
     }, 1500);
   },
+  timeOut(runId) { log('timeOut', runId); },
   openAdminMenu() { ui.adminMenuOpen = true; update(); },
   closeAdminMenu() { ui.adminMenuOpen = false; update(); },
   undo() { log('undo'); },

@@ -50,6 +50,8 @@ export interface UiActions {
   startChallenge(teamId: string): void; // → progress.phase = 'choosingTrack' (기차역)
   selectTrack(questionSetId: string): void; // 기차역에서 말씀 선택 → 문제 시작
   selectChoice(choiceId: string): void;
+  /** 문제 시간 제한 초과 → 오답과 같음. runId는 타이머를 시작한 문제 대기 단계 */
+  timeOut(runId: number): void;
   openAdminMenu(): void;
   closeAdminMenu(): void;
   undo(): void;

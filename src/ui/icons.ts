@@ -237,3 +237,25 @@ export function starIcon(filled = true): SVGSVGElement {
     '.KK...KK.',
   ], { K: filled ? LINE : 'currentColor', Y: filled ? 'currentColor' : 'transparent' }, `px-icon px-icon--star${filled ? '' : ' is-empty'}`);
 }
+
+/** 픽셀 폭탄 (12×12칸) — 문제 시간 제한. 심지 불꽃(F)은 CSS로 깜빡인다 */
+export function bombIcon(): SVGSVGElement {
+  return pixelArt(
+    [
+      '.........FF.',
+      '........FYF.',
+      '.......w.F..',
+      '......w.....',
+      '...KKKK.....',
+      '..KKKKKK....',
+      '.KSKKKKKK...',
+      '.KSKKKKKK...',
+      '.KKKKKKKK...',
+      '.KKKKKKKK...',
+      '..KKKKKK....',
+      '...KKKK.....',
+    ],
+    { K: '#2a2840', S: SHINE, w: '#c9b38a', F: STOP, Y: LAMP },
+    'bomb',
+  );
+}
