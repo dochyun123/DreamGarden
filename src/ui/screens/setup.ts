@@ -50,10 +50,11 @@ export function createSetupScreen(ctx: Ctx): Screen {
   const save = h('button', { class: 'btn btn--primary btn--large', attrs: { type: 'button' }, on: { click: () => onSave() } }, '저장');
   const cancel = h('button', { class: 'btn', attrs: { type: 'button' }, on: { click: () => ctx.actions.setView('home') } }, '취소');
 
-  const el = h('section', { class: 'screen' },
+  const el = h('section', { class: 'screen setup-screen' },
+    h('div', { class: 'st-lamps', attrs: { 'aria-hidden': 'true' } }),
     h('header', { class: 'topbar' },
       h('div'),
-      h('h1', { class: 'page__title' }, '관리'),
+      h('h1', { class: 'page__title' }, '설정'),
       h('div', { class: 'topbar__right' }, cancel),
     ),
     h('div', { class: 'page' },
@@ -69,7 +70,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
           ),
         ),
         h('div', { class: 'setup__main' },
-          h('div', { class: 'setup__head' }, scriptureTitle, h('span', { class: 'setup__hint' }, '보기 앞 ● = 정답'), addScripture),
+          h('div', { class: 'setup__head' }, scriptureTitle, addScripture),
           scriptureRows,
           issues,
           h('div', { class: 'setup__actions' }, save),
@@ -187,7 +188,7 @@ export function createSetupScreen(ctx: Ctx): Screen {
           attrs: { type: 'text', value: c, placeholder: `보기 ${ci + 1}`, 'aria-label': `${label} 보기 ${ci + 1}` },
           on: { input: () => { q.choices[ci] = input.value; } },
         });
-        return h('div', { class: 'q-edit__choice', attrs: { title: '동그라미 = 정답' } }, radio, input);
+        return h('div', { class: 'q-edit__choice' }, radio, input);
       })),
     );
   }

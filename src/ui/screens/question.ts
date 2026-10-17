@@ -64,7 +64,7 @@ export function createQuestionScreen(ctx: Ctx): Screen {
     'button',
     {
       class: 'admin-fab',
-      attrs: { type: 'button', 'aria-label': '관리 메뉴', title: '관리 메뉴' },
+      attrs: { type: 'button', 'aria-label': '설정 메뉴', title: '설정 메뉴' },
       on: { click: () => ctx.actions.openAdminMenu() },
     },
     gearIcon(),
@@ -248,7 +248,7 @@ export function createQuestionScreen(ctx: Ctx): Screen {
       syncTimer(s, u);
 
       setClasses(fab, { 'is-alert': u.animationStuck, 'has-notice': !!u.notice && !u.animationStuck });
-      fab.setAttribute('aria-label', u.animationStuck ? '관리 메뉴 — 연출 건너뛰기 필요' : '관리 메뉴');
+      fab.setAttribute('aria-label', u.animationStuck ? '설정 메뉴 — 연출 건너뛰기 필요' : '설정 메뉴');
     },
   };
 }

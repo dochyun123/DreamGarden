@@ -17,7 +17,7 @@ export function createStationScreen(ctx: Ctx): Screen {
   const signs = h('div', { class: 'st-signs', attrs: { role: 'group', 'aria-label': '갈림길' } });
   const fab = h('button', {
     class: 'admin-fab',
-    attrs: { type: 'button', 'aria-label': '관리 메뉴', title: '관리 메뉴' },
+    attrs: { type: 'button', 'aria-label': '설정 메뉴', title: '설정 메뉴' },
     on: { click: () => ctx.actions.openAdminMenu() },
   }, gearIcon());
 

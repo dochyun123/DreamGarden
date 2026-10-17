@@ -12,9 +12,9 @@ export function createHomeScreen(ctx: Ctx): Screen {
   const actionsBox = h('div', { class: 'home__actions' });
   const manage = h('button', {
     class: 'home__manage',
-    attrs: { type: 'button', 'aria-label': '관리', title: '관리' },
+    attrs: { type: 'button', 'aria-label': '설정', title: '설정' },
     on: { click: () => { ctx.local.pickingTeam = false; a.setView('setup'); } },
-  }, gearIcon(), h('span', null, '관리'));
+  }, gearIcon(), h('span', null, '설정'));
   const el = h('section', { class: 'screen start home' }, ...titleScene(), actionsBox, pixelTrain(), manage);
 
   const pick = (on: boolean) => () => { ctx.local.pickingTeam = on; ctx.rerender(); };

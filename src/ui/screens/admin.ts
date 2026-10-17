@@ -29,9 +29,9 @@ function animating(state: GameState): boolean {
 export function createAdminMenu(ctx: Ctx): Screen {
   const a = ctx.actions;
   const body = h('div', { class: 'c-menu__body' });
-  const panelEl = h('div', { class: 'c-menu', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '관리 메뉴' } },
+  const panelEl = h('div', { class: 'c-menu', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '설정 메뉴' } },
     h('div', { class: 'c-menu__head' },
-      h('h2', { class: 'c-title' }, '관리 메뉴'),
+      h('h2', { class: 'c-title' }, '설정 메뉴'),
       h('button', {
         class: 'cbtn cbtn--icon',
         attrs: { type: 'button', 'aria-label': '닫기', title: '닫기' },
