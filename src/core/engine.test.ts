@@ -401,14 +401,15 @@ describe('관리 화면 저장', () => {
       q.answer = 5;
     });
     const r = saveSetup(s, { teamNames: ['가'], scriptures: [...list, added] });
-    expect(r.questionSets.map((x) => x.id)).toEqual(['set-1', 'set-2', 'set-3', 'set-4', 'set-5']);
+    const n = list.length + 1;
+    expect(r.questionSets.map((x) => x.id)).toEqual(Array.from({ length: n }, (_, i) => `set-${i + 1}`));
     expect(r.questionSets[0].scriptureReference).toBe(s.questionSets[1].scriptureReference);
     expect(r.questionSets[0].questions[0].id).toBe('s1-q1');
-    expect(r.questionSets[4].questions[0]).toEqual({
-      id: 's5-q1',
+    expect(r.questionSets[n - 1].questions[0]).toEqual({
+      id: `s${n}-q1`,
       prompt: '여호와는 ___ 목자시니 0',
-      choices: ['가', '나', '다', '라', '마'].map((text, k) => ({ id: `s5-q1-c${k + 1}`, text })),
-      correctChoiceId: 's5-q1-c5',
+      choices: ['가', '나', '다', '라', '마'].map((text, k) => ({ id: `s${n}-q1-c${k + 1}`, text })),
+      correctChoiceId: `s${n}-q1-c5`,
     });
   });
 
