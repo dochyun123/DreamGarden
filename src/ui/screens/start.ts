@@ -38,7 +38,7 @@ export function titleScene(): HTMLElement[] {
   return [
     h('div', { class: 'start__stars', attrs: { 'aria-hidden': 'true' } }),
     h('h1', { class: 'start__title' },
-      h('span', { class: 'start__title-main' }, '드리가든이 가을을 보내는 법'),
+      h('span', { class: 'start__title-main' }, '드림가든이 가을을 보내는 법'),
       h('span', { class: 'start__title-accent' }, '암송'),
     ),
   ];
