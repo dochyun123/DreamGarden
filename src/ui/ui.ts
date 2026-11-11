@@ -14,12 +14,14 @@ import { createSetupScreen } from './screens/setup';
 import { createQuestionScreen } from './screens/question';
 import { createStationScreen } from './screens/station';
 import { createHomeScreen } from './screens/home';
+import { createRevivalScreen } from './screens/revival';
 import { createAdminMenu, createConfirmModal } from './screens/admin';
 
 /**
+ * revival: 패자부활전(모든 팀이 끝난 뒤 남은 말씀 — 시간 제한 없이 문제 보고 정답 공개).
  * setup: 관리(팀 수·팀 이름·말씀 10개 출처와 구절). home: 게임 시작 화면(→ 미도전 팀 고르기). question: 기차역·문제
  */
-export type View = 'setup' | 'home' | 'question';
+export type View = 'setup' | 'home' | 'question' | 'revival';
 
 /** 영속되지 않는 화면 상태 (app이 소유) */
 export interface UiState {
@@ -48,6 +50,8 @@ export interface UiActions {
   /** 관리 화면 저장. 검증 통과 시 기록 초기화 + 팀·말씀 반영 후 home. 기록이 있으면 UI가 먼저 확인 모달을 띄운다 */
   saveSetup(draft: SetupDraft): void;
   startChallenge(teamId: string): void; // → progress.phase = 'choosingTrack' (기차역)
+  /** 팀 선택 화면의 '연습게임' (요한복음 3:16, 2문제, 기록 안 남음) → 바로 문제 화면 */
+  startPractice(): void;
   selectTrack(questionSetId: string): void; // 기차역에서 말씀 선택 → 문제 시작
   selectChoice(choiceId: string): void;
   /** 문제 시간 제한 초과 → 오답과 같음. runId는 타이머를 시작한 문제 대기 단계 */
@@ -55,6 +59,10 @@ export interface UiActions {
   openAdminMenu(): void;
   closeAdminMenu(): void;
   undo(): void;
+  /** 처음 상태로: 모든 기록 삭제 + 말씀·문제를 기본 데이터로. 팀 이름은 유지 (브라우저 데이터 지우기 대신) */
+  resetAll(): void;
+  /** 패자부활전에서 말씀 하나를 끝까지 풀었다 → 그 말씀은 다시 고를 수 없게 */
+  finishRevival(setId: string): void;
   skipAnimation(): void;
   enterFullscreen(): void;
 }
@@ -68,11 +76,12 @@ export interface UiHandle {
 const STAGE_W = 1920;
 const STAGE_H = 1080;
 
-type ScreenKey = 'start' | 'setup' | 'home' | 'station' | 'question';
+type ScreenKey = 'start' | 'setup' | 'home' | 'station' | 'question' | 'revival';
 
 function screenKeyFor(state: GameState, ui: UiState): ScreenKey {
   if (!ui.started) return 'start';
   if (ui.view === 'setup') return 'setup';
+  if (ui.view === 'revival' && !state.progress) return 'revival';
   if (ui.view === 'question' && state.progress) return state.progress.phase === 'choosingTrack' ? 'station' : 'question';
   return 'home';
 }
@@ -110,7 +119,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
   let menu: Screen | null = null;
   let confirmModal: { key: string; el: HTMLElement } | null = null;
 
-  const local: LocalUi = { confirm: null, lock: null, setup: null, pickingTeam: false };
+  const local: LocalUi = { confirm: null, lock: null, setup: null, pickingTeam: false, revival: null };
   const ctx: Ctx = { actions, local, rerender: () => { if (last) render(last.state, last.ui); } };
 
   const factories: Record<ScreenKey, () => Screen> = {
@@ -119,6 +128,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     station: () => createStationScreen(ctx),
     question: () => createQuestionScreen(ctx),
     home: () => createHomeScreen(ctx),
+    revival: () => { local.revival = null; return createRevivalScreen(ctx); },
   };
 
   document.addEventListener('keydown', (e) => {
@@ -156,7 +166,7 @@ export function mountUi(root: HTMLElement, actions: UiActions): UiHandle {
     }
 
     const label = lastUndoLabel(state);
-    undoBtn.hidden = !ui.started || ui.introPlaying || key === 'setup' || key === 'start';
+    undoBtn.hidden = !ui.started || ui.introPlaying || key === 'setup' || key === 'start' || key === 'revival';
     undoBtn.disabled = !label;
     undoBtn.title = label ? `되돌리기: ${label}` : '되돌릴 행동이 없습니다';
 

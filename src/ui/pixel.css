@@ -115,6 +115,7 @@
 .home.is-picking .start__train { display: none; } /* 팀 버튼·뒤로 버튼과 겹치지 않게 */
 .home__teams.is-wide { grid-template-columns: repeat(5, 300px); } /* 9팀 이상: 5열 */
 /* 구석의 작은 ⚙ 관리 */
+.home__corner { position: absolute; left: 24px; bottom: 20px; z-index: 2; display: flex; gap: 8px; }
 .home__manage {
   position: absolute;
   left: 24px; bottom: 20px;
@@ -488,3 +489,18 @@
 .setup-screen .btn--primary:hover:not(:disabled) { background: #ffe08a; }
 .setup-screen .issues { background: #3a1420; }
 .setup-screen ::-webkit-scrollbar-thumb { border-radius: 0; background: var(--c-car-trim); box-shadow: inset 0 0 0 4px var(--pxe); }
+
+/* ───────── 패자부활전: 시간 제한 없음, '정답 공개'로 정답 표시 ───────── */
+.revival__next { position: absolute; right: 50px; top: 8px; min-width: 300px; min-height: 96px; padding: 0 36px; font-size: 40px; }
+.revival__exit { z-index: 60; }
+.revival__choices .choice { cursor: default; }
+.home__actions.is-row { flex-direction: row; }
+.home .home__revival { min-width: 320px; --px-bg: var(--c-sign); color: #fff; }
+.home .home__revival:hover { --px-bg: var(--c-sign-light); }
+.choices.is-revealed .choice { opacity: 0.4; }
+.choices.is-revealed .choice.is-answer { --px-bg: var(--c-correct); --px-edge: #fff; color: var(--c-on-highlight); opacity: 1; transform: scale(1.03); }
+.choice.is-answer .choice__num { background: #fff; color: var(--c-on-highlight); }
+.home__corner .home__manage { position: static; }
+.home__row { display: flex; gap: 28px; }
+.home .home__practice { --px-bg: var(--c-lamp); color: var(--c-on-highlight); }
+.home .home__practice:hover { --px-bg: #ffe08a; }

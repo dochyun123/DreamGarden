@@ -8,6 +8,28 @@ import type {
   AnimationKind, ContentFile, GameSnapshot, GameState, Phase, Question, QuestionSet, Team,
 } from '../types';
 
+/** 연습게임 문제 (요한복음 3:16) — 팀 선택 화면의 '연습게임'. 기록에 남지 않는다 */
+export const PRACTICE_NAME = '연습게임';
+export const PRACTICE_SET: QuestionSet = {
+  id: 'practice',
+  scriptureReference: '요한복음 3:16',
+  scriptureText: '하나님이 세상을 이처럼 사랑하사 독생자를 주셨으니 이는 그를 믿는 자마다 멸망하지 않고 영생을 얻게 하려 하심이라',
+  questions: [
+    {
+      id: 'p-q1',
+      prompt: '하나님이 세상을 이처럼 사랑하사 ___를 주셨으니 이는 그를 믿는 자마다 멸망하지 않고 ___을 얻게 하려 하심이라',
+      choices: [['율법'], ['독생자'], ['성령'], ['선지자'], ['천사']].map(([text], i) => ({ id: `p-q1-c${i + 1}`, text })),
+      correctChoiceId: 'p-q1-c2',
+    },
+    {
+      id: 'p-q2',
+      prompt: '하나님이 세상을 이처럼 사랑하사 독생자를 주셨으니 이는 그를 믿는 자마다 멸망하지 않고 ___을 얻게 하려 하심이라',
+      choices: [['평안'], ['축복'], ['지혜'], ['영생'], ['은혜']].map(([text], i) => ({ id: `p-q2-c${i + 1}`, text })),
+      correctChoiceId: 'p-q2-c4',
+    },
+  ],
+};
+
 export interface TeamDraft {
   name: string;
 }
@@ -138,6 +160,45 @@ export function startChallenge(state: GameState, teamId: string): GameState {
   };
 }
 
+/** 연습게임 시작: 기차역 없이 바로 문제. 진행 중인 도전이 있으면 거부. */
+export function startPractice(state: GameState): GameState {
+  if (state.progress) return state;
+  return {
+    ...pushUndo(state, `${PRACTICE_NAME} 시작`),
+    progress: {
+      activeTeamId: '',
+      practice: true,
+      questionIndex: 0,
+      lives: STARTING_LIVES,
+      passedCount: 0,
+      phase: 'awaitingAnswer',
+      selectedChoiceId: null,
+      runId: maxKnownRunId(state) + 1,
+    },
+  };
+}
+
+/** 현재 도전의 말씀 세트 (연습게임이면 PRACTICE_SET) */
+export function activeSet(state: GameState): QuestionSet | undefined {
+  const p = state.progress;
+  if (!p) return undefined;
+  if (p.practice) return PRACTICE_SET;
+  const team = state.teams.find((t) => t.id === p.activeTeamId);
+  return team?.questionSetId ? state.questionSets.find((s) => s.id === team.questionSetId) : undefined;
+}
+
+/** 현재 도전 이름 (팀 이름 또는 '연습게임') */
+export function activeName(state: GameState): string {
+  const p = state.progress;
+  if (!p) return '';
+  return p.practice ? PRACTICE_NAME : state.teams.find((t) => t.id === p.activeTeamId)?.name ?? '';
+}
+
+/** 현재 도전의 문제 수 (연습게임 2, 평소 4) */
+export function activeQuestionCount(state: GameState): number {
+  return state.progress?.practice ? PRACTICE_SET.questions.length : QUESTIONS_PER_SET;
+}
+
 /** 기차역에서 말씀(세트) 선택. phase가 choosingTrack이고 다른 팀이 고르지 않은 세트일 때만. 선택 전 스냅샷 push → phase=awaitingAnswer, runId+1 */
 export function selectTrack(state: GameState, questionSetId: string): GameState {
   const progress = state.progress;
@@ -154,9 +215,10 @@ export function selectTrack(state: GameState, questionSetId: string): GameState 
   };
 }
 
-/** 아직 어떤 팀도 고르지 않았고 문제가 5개인 세트 id (기차역에서 열린 길) */
+/** 아직 어떤 팀도 고르지 않았고, 패자부활전에서 풀지도 않았고, 문제가 4개인 세트 id (기차역에서 열린 길) */
 export function availableSetIds(state: GameState): string[] {
   const taken = new Set(state.teams.map((t) => t.questionSetId).filter((id): id is string => id !== null));
+  for (const id of state.revivalDoneSetIds ?? []) taken.add(id);
   return state.questionSets
     .filter((s) => !taken.has(s.id) && s.questions.length === QUESTIONS_PER_SET)
     .map((s) => s.id);
@@ -174,10 +236,8 @@ export function selectChoice(state: GameState, choiceId: string): GameState {
   if (!question) return state;
   const choiceIndex = question.choices.findIndex((c) => c.id === choiceId);
   if (choiceIndex < 0) return state;
-  const team = state.teams.find((t) => t.id === progress.activeTeamId);
-  if (!team) return state;
 
-  const label = `${team.name} ${progress.questionIndex + 1}번 문제에 ${choiceIndex + 1}번 선택`;
+  const label = `${activeName(state)} ${progress.questionIndex + 1}번 문제에 ${choiceIndex + 1}번 선택`;
   return judge(state, choiceId === question.correctChoiceId, choiceId, label);
 }
 
@@ -188,17 +248,15 @@ export function selectChoice(state: GameState, choiceId: string): GameState {
 export function timeOut(state: GameState, runId: number): GameState {
   const progress = state.progress;
   if (!progress || progress.phase !== 'awaitingAnswer' || progress.runId !== runId) return state;
-  const team = state.teams.find((t) => t.id === progress.activeTeamId);
-  if (!team || !getCurrentQuestion(state)) return state;
-  return judge(state, false, null, `${team.name} ${progress.questionIndex + 1}번 문제 시간 초과`);
+  if (!getCurrentQuestion(state)) return state;
+  return judge(state, false, null, `${activeName(state)} ${progress.questionIndex + 1}번 문제 시간 초과`);
 }
 
 function judge(state: GameState, isCorrect: boolean, choiceId: string | null, label: string): GameState {
   const progress = state.progress!;
-  const team = state.teams.find((t) => t.id === progress.activeTeamId)!;
   const passedCount = isCorrect ? progress.passedCount + 1 : progress.passedCount;
   const lives = isCorrect ? progress.lives : Math.max(0, progress.lives - 1);
-  const finished = isCorrect ? passedCount >= QUESTIONS_PER_SET : lives === 0;
+  const finished = isCorrect ? passedCount >= activeQuestionCount(state) : lives === 0;
 
   const next: GameState = {
     ...pushUndo(state, label),
@@ -211,7 +269,8 @@ function judge(state: GameState, isCorrect: boolean, choiceId: string | null, la
       runId: progress.runId + 1,
     },
   };
-  if (!finished) return next;
+  if (!finished || progress.practice) return next; // 연습게임은 기록에 남기지 않는다
+  const team = state.teams.find((t) => t.id === progress.activeTeamId)!;
 
   return {
     ...next,
@@ -255,15 +314,19 @@ export function completeAnimation(state: GameState, runId: number): GameState {
     case 'choosingTrack':
     case 'awaitingAnswer':
       return state;
-    case 'correct':
-      return progress.passedCount >= QUESTIONS_PER_SET
+    case 'correct': {
+      const total = activeQuestionCount(state);
+      if (progress.passedCount >= total && progress.practice) return endPractice(state); // 연습게임은 천국 없이 처음으로
+      return progress.passedCount >= total
         ? moveTo('heaven')
-        : moveTo('awaitingAnswer', Math.min(progress.questionIndex + 1, QUESTIONS_PER_SET - 1));
+        : moveTo('awaitingAnswer', Math.min(progress.questionIndex + 1, total - 1));
+    }
     case 'wrong':
-      return progress.lives > 0 ? moveTo('awaitingAnswer') : moveTo('inferno');
+      if (progress.lives > 0) return moveTo('awaitingAnswer');
+      return progress.practice ? endPractice(state) : moveTo('inferno'); // 연습게임은 불구덩이 없이 처음으로
     case 'heaven':
     case 'inferno':
-      return { ...state, progress: null };
+      return progress.practice ? endPractice(state) : { ...state, progress: null };
   }
 }
 
@@ -301,16 +364,27 @@ export function resetRecords(state: GameState): GameState {
     progress: null,
     results: [],
     undoHistory: [],
+    revivalDoneSetIds: [],
   };
+}
+
+/** 패자부활전에서 풀 수 있는 말씀: 진행 중인 도전이 없을 때 언제든, 어떤 팀도 고르지 않았고 패자부활전에서도 아직 안 푼 세트 */
+export function revivalSetIds(state: GameState): string[] {
+  if (state.progress) return [];
+  return availableSetIds(state);
+}
+
+/** 패자부활전에서 말씀 하나를 끝까지 풀었다 → 다시 고를 수 없게 표시 */
+export function finishRevival(state: GameState, setId: string): GameState {
+  if (!revivalSetIds(state).includes(setId)) return state;
+  return { ...state, revivalDoneSetIds: [...(state.revivalDoneSetIds ?? []), setId] };
 }
 
 /** 현재 화면에 보여줄 문제. progress 없으면 null. */
 export function getCurrentQuestion(state: GameState): Question | null {
   const progress = state.progress;
   if (!progress) return null;
-  const team = state.teams.find((t) => t.id === progress.activeTeamId);
-  const set = team?.questionSetId ? state.questionSets.find((s) => s.id === team.questionSetId) : undefined;
-  return set?.questions[progress.questionIndex] ?? null;
+  return activeSet(state)?.questions[progress.questionIndex] ?? null;
 }
 
 /** phase에 해당하는 연출. awaitingAnswer·choosingTrack이면 null. */
@@ -319,6 +393,11 @@ export function animationForPhase(phase: Phase): AnimationKind | null {
 }
 
 // ───────── 내부 도우미 ─────────
+
+/** 연습게임 끝 → 처음 화면. 연습 중 쌓인 되돌리기 이력도 지운다 (실제 기록과 섞이지 않게) */
+function endPractice(state: GameState): GameState {
+  return { ...state, progress: null, undoHistory: state.undoHistory.filter((u) => !u.label.startsWith(PRACTICE_NAME)) };
+}
 
 function pushUndo(state: GameState, label: string): GameState {
   const snapshot: GameSnapshot = clone({

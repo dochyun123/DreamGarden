@@ -71,6 +71,8 @@ export interface Progress {
    * 연출 완료 신호는 runId가 일치할 때만 반영한다 (취소된 연출 무시).
    */
   runId: number;
+  /** 연습게임(요한복음 3:16, 2문제). 팀 기록·결과에 남지 않는다. activeTeamId는 '' */
+  practice?: boolean;
 }
 
 export interface Result {
@@ -102,6 +104,8 @@ export interface GameState {
   progress: Progress | null;
   results: Result[];
   undoHistory: UndoEntry[];
+  /** 패자부활전에서 이미 푼 남은 말씀 id (팀 수가 말씀 수보다 적을 때). 예전 저장본엔 없을 수 있다 */
+  revivalDoneSetIds?: string[];
 }
 
 // ───────── 검증 ─────────

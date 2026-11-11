@@ -3,7 +3,7 @@ import sample from '../../data/sample-content.json';
 import type { ContentFile, GameState } from '../types';
 import {
   availableSetIds, completeAnimation, createInitialState, emptyScriptureDraft, saveSetup, scriptureDraftOf, getCurrentQuestion, lastUndoLabel, registerTeams,
-  replaceContent, resetRecords, resumeRun, selectChoice, selectTrack, startChallenge, timeOut, undo,
+  finishRevival, startPractice, replaceContent, resetRecords, resumeRun, revivalSetIds, selectChoice, selectTrack, startChallenge, timeOut, undo,
 } from './engine';
 
 const content = sample as ContentFile;
@@ -413,4 +413,67 @@ describe('관리 화면 저장', () => {
     });
   });
 
+});
+
+describe('패자부활전', () => {
+  /** 팀 2개가 set-1, set-2로 끝까지(목숨 0) 진행 */
+  function allDone(): GameState {
+    let s = setup(2);
+    for (const id of ['team-1', 'team-2']) {
+      s = begin(s, id);
+      while (s.progress) s = answer(s, wrongId(s));
+    }
+    return s;
+  }
+
+  it('진행 중인 도전이 없으면 언제든 열리고, 도전 중에는 닫힌다', () => {
+    expect(revivalSetIds(setup(2))).toHaveLength(10);
+    expect(revivalSetIds(begin(setup(2), 'team-1'))).toEqual([]);
+  });
+
+  it('패자부활전에서 푼 말씀은 팀도 고를 수 없다', () => {
+    const s = startChallenge(finishRevival(setup(2), 'set-1'), 'team-1');
+    expect(availableSetIds(s)).not.toContain('set-1');
+    expect(selectTrack(s, 'set-1')).toBe(s);
+  });
+
+  it('모든 팀이 끝나면 아무도 고르지 않은 말씀만 열린다', () => {
+    const ids = revivalSetIds(allDone());
+    expect(ids).not.toContain('set-1');
+    expect(ids).not.toContain('set-2');
+    expect(ids).toContain('set-3');
+  });
+
+  it('끝까지 푼 말씀은 다시 고를 수 없고, 기록 초기화로 다시 열린다', () => {
+    const s = finishRevival(allDone(), 'set-3');
+    expect(revivalSetIds(s)).not.toContain('set-3');
+    expect(finishRevival(s, 'set-3')).toBe(s);
+    expect(resetRecords(s).revivalDoneSetIds).toEqual([]);
+  });
+});
+
+describe('연습게임', () => {
+  it('2문제를 다 맞히면 천국 없이 처음으로. 팀 기록·되돌리기 이력은 그대로다', () => {
+    const before = setup(2);
+    let s = startPractice(before);
+    expect(getCurrentQuestion(s)!.id).toBe('p-q1');
+    const phases: string[] = [];
+    s = answer(s, correctId(s), phases);
+    expect(getCurrentQuestion(s)!.id).toBe('p-q2');
+    s = answer(s, correctId(s), phases);
+    expect(phases).toEqual(['correct', 'correct']);
+    expect(s.progress).toBeNull();
+    expect(s.results).toEqual([]);
+    expect(s.teams).toEqual(before.teams);
+    expect(s.undoHistory).toEqual(before.undoHistory);
+  });
+
+  it('목숨을 다 잃으면 오답 효과 뒤 불구덩이 없이 처음으로, 기록은 남지 않는다', () => {
+    let s = startPractice(setup(2));
+    const phases: string[] = [];
+    while (s.progress) s = answer(s, wrongId(s), phases);
+    expect(phases).toEqual(['wrong', 'wrong', 'wrong']);
+    expect(s.results).toEqual([]);
+    expect(s.teams.every((t) => t.status === 'notStarted')).toBe(true);
+  });
 });

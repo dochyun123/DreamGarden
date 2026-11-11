@@ -18,13 +18,15 @@ export interface SetupForm {
 /** UI 내부 전용 상태 (app의 UiState와 별개) */
 export interface LocalUi {
   /** 자체 확인 모달 (window.confirm 대신): 관리 화면 저장 → 기록 초기화 확인 */
-  confirm: { kind: 'save'; onOk: () => void } | null;
+  confirm: { kind: 'save' | 'reset'; onOk: () => void } | null;
   /** 보기 클릭 즉시 잠금: 이 runId에서는 다시 선택할 수 없다 */
   lock: { runId: number; choiceId: string } | null;
   /** 관리 화면 입력값. 관리 화면에 들어올 때 state로 다시 채운다 */
   setup: SetupForm | null;
   /** home에서 '게임 시작'을 눌러 팀 목록을 펼쳤는가 */
   pickingTeam: boolean;
+  /** 패자부활전 진행 (저장 안 함). null = 말씀 고르는 중 */
+  revival: { setId: string; index: number; revealed: boolean } | null;
 }
 
 export interface Ctx {

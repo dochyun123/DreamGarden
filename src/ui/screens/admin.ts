@@ -65,17 +65,18 @@ export function createAdminMenu(ctx: Ctx): Screen {
   };
 }
 
-/** 자체 확인 모달 (window.confirm 대신): 관리 화면 저장 → 기록 초기화 */
+/** 자체 확인 모달 (window.confirm 대신): 관리 화면 저장 → 기록 초기화 / home의 '초기화' */
 export function createConfirmModal(ctx: Ctx, confirm: NonNullable<Ctx['local']['confirm']>): HTMLElement {
   const cancel = () => { ctx.local.confirm = null; ctx.rerender(); };
   const cancelBtn = cbtn('취소', cancel);
+  const reset = confirm.kind === 'reset';
   const el = h('div', { class: 'scrim scrim--console', on: { click: (e) => { if (e.target === el) cancel(); } } },
     h('div', { class: 'c-modal', attrs: { role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'confirm-title' } },
-      h('h2', { class: 'c-title', attrs: { id: 'confirm-title' } }, '저장하면 기록이 초기화됩니다'),
-      h('p', { class: 'c-hint' }, '진행 중인 도전과 모든 팀의 결과가 지워집니다.'),
+      h('h2', { class: 'c-title', attrs: { id: 'confirm-title' } }, reset ? '모든 팀의 결과와 기록이 초기화됩니다.' : '저장하면 기록이 초기화됩니다'),
+      h('p', { class: 'c-hint' }, reset ? '초기화 하시겠습니까?' : '진행 중인 도전과 모든 팀의 결과가 지워집니다.'),
       h('div', { class: 'c-row c-row--end' },
         cancelBtn,
-        cbtn('초기화하고 저장', () => { ctx.local.confirm = null; confirm.onOk(); ctx.rerender(); }, { kind: 'danger-solid' }),
+        cbtn(reset ? '초기화' : '초기화하고 저장', () => { ctx.local.confirm = null; confirm.onOk(); ctx.rerender(); }, { kind: 'danger-solid' }),
       ),
     ),
   );

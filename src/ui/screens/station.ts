@@ -1,5 +1,5 @@
 // 담당: dream-f4 — 지하 기차역: 갈림길(말씀) 10개 중 하나 고르기 (phase 'choosingTrack')
-// 표지판에는 말씀 출처만 보인다. 다른 팀이 이미 고른 갈림길은 셔터가 내려가 고를 수 없다.
+// 표지판에는 말씀 출처만 보인다. 다른 팀이 이미 고른 갈림길(패자부활전에서 푼 말씀 포함)은 셔터가 내려가 고를 수 없다.
 import type { GameState } from '../../types';
 import type { UiState } from '../ui';
 import type { Ctx, Screen } from '../context';
@@ -47,7 +47,7 @@ export function createStationScreen(ctx: Ctx): Screen {
   function buildSigns(s: GameState, activeTeamId: string): void {
     signs.replaceChildren(
       ...s.questionSets.map((set, i) => {
-        const taken = s.teams.some((t) => t.id !== activeTeamId && t.questionSetId === set.id);
+        const taken = s.teams.some((t) => t.id !== activeTeamId && t.questionSetId === set.id) || !!s.revivalDoneSetIds?.includes(set.id);
         const btn: HTMLButtonElement = h('button', {
           class: `st-sign${taken ? ' is-taken' : ''}`,
           attrs: { type: 'button', disabled: taken, 'aria-label': `${i + 1}번 갈림길 ${set.scriptureReference}${taken ? ' (선택됨)' : ''}` },
@@ -72,7 +72,7 @@ export function createStationScreen(ctx: Ctx): Screen {
       if (!p) return;
       teamName.textContent = s.teams.find((t) => t.id === p.activeTeamId)?.name ?? '';
       // 다른 팀의 선택이 바뀔 때만 다시 그린다
-      const key = `${p.activeTeamId}|${s.questionSets.map((x) => x.id).join(',')}|${s.teams.map((t) => t.questionSetId ?? '').join(',')}`;
+      const key = `${p.activeTeamId}|${s.questionSets.map((x) => x.id).join(',')}|${s.teams.map((t) => t.questionSetId ?? '').join(',')}|${(s.revivalDoneSetIds ?? []).join(',')}`;
       if (key !== signsKey) {
         signsKey = key;
         buildSigns(s, p.activeTeamId);

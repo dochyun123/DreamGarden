@@ -13,6 +13,8 @@ export interface PlayContext {
   livesAfter: number;
   /** 팀이 암송한 구절 출처 (예: '요한복음 3:16'). heaven에서만 표시, 비어 있으면 생략 */
   scriptureReference?: string;
+  /** 연습게임: 정답·오답은 '정답!'/'오답' 표시만 (터널 질주·하트 소멸 없음, 영상 안 씀) */
+  simple?: boolean;
 }
 
 export interface AnimationPlayer {
@@ -336,7 +338,7 @@ export function createAnimationPlayer(host: HTMLElement, mediaBase = './media/')
         cleanups: [],
       };
       current = s;
-      if (videoUnavailable.has(kind)) runFallback(s, 'ended');
+      if (ctx.simple || videoUnavailable.has(kind)) runFallback(s, 'ended');
       else tryVideo(s);
     });
   }

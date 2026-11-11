@@ -1,7 +1,7 @@
 // 담당: dream-f4 — 문제 화면 (달리는 지하철 객차 안). 왼쪽 위에 몇 번째 문제인지·진행 칸, 정답은 표시하지 않는다.
 import type { GameState, Question } from '../../types';
-import { QUESTIONS_PER_SET, STARTING_LIVES } from '../../types';
-import { getCurrentQuestion } from '../../core/engine';
+import { STARTING_LIVES } from '../../types';
+import { activeName, activeQuestionCount, activeSet, getCurrentQuestion } from '../../core/engine';
 import type { UiState } from '../ui';
 import type { Ctx, Screen } from '../context';
 import { h, setClasses } from '../dom';
@@ -207,9 +207,9 @@ export function createQuestionScreen(ctx: Ctx): Screen {
   }
 
   /** "문제 2 / 4" + 칸 4개 (통과한 문제만큼 채움) */
-  function renderRound(index: number, passed: number): void {
-    roundLabel.textContent = `문제 ${index + 1} / ${QUESTIONS_PER_SET}`;
-    roundBar.replaceChildren(...Array.from({ length: QUESTIONS_PER_SET }, (_, i) =>
+  function renderRound(index: number, passed: number, total: number): void {
+    roundLabel.textContent = `문제 ${index + 1} / ${total}`;
+    roundBar.replaceChildren(...Array.from({ length: total }, (_, i) =>
       h('span', { class: `q-round__cell${i < passed ? ' is-done' : i === index ? ' is-now' : ''}` })));
   }
 
@@ -220,15 +220,14 @@ export function createQuestionScreen(ctx: Ctx): Screen {
       ui = u;
       const p = s.progress;
       if (!p) return;
-      const team = s.teams.find((t) => t.id === p.activeTeamId);
-      teamName.textContent = team?.name ?? '';
-      reference.textContent = s.questionSets.find((qs) => qs.id === team?.questionSetId)?.scriptureReference ?? '';
+      teamName.textContent = activeName(s);
+      reference.textContent = activeSet(s)?.scriptureReference ?? '';
       // 하트는 연출이 줄인다: 오답 연출 중에는 차감 전 값, 불구덩이에서는 0
-      renderRound(p.questionIndex, p.passedCount);
+      renderRound(p.questionIndex, p.passedCount, activeQuestionCount(s));
       renderLives(p.phase === 'wrong' ? Math.min(STARTING_LIVES, p.lives + 1) : p.phase === 'inferno' ? 0 : p.lives);
 
       const q = getCurrentQuestion(s);
-      const key = `${p.activeTeamId}|${p.questionIndex}|${q?.id ?? ''}`;
+      const key = `${p.practice ? 'practice' : p.activeTeamId}|${p.questionIndex}|${q?.id ?? ''}`;
       if (key !== questionKey) {
         questionKey = key;
         if (q) {

@@ -90,6 +90,10 @@ export function bootstrap(root: HTMLElement): void {
       }
       update();
     },
+    startPractice() {
+      if (commit(engine.startPractice(state))) ui.view = 'question';
+      update();
+    },
     selectTrack(questionSetId) {
       if (!ui.started || ui.adminMenuOpen || ui.introPlaying || ui.view !== 'question') return;
       commit(engine.selectTrack(state, questionSetId));
@@ -124,6 +128,22 @@ export function bootstrap(root: HTMLElement): void {
         if (state.progress) ui.view = 'question';
         else if (ui.view === 'question') ui.view = 'home';
       }
+      update();
+    },
+    resetAll() {
+      cancelAnimation();
+      ui.introPlaying = false;
+      const fresh = engine.createInitialState(sampleContent as ContentFile);
+      const names = state.teams.map((t) => ({ name: t.name }));
+      if (commit(engine.registerTeams(fresh, names))) {
+        introShown = false;
+        ui.notice = null;
+        ui.view = state.teams.length > 0 ? 'home' : 'setup';
+      }
+      update();
+    },
+    finishRevival(setId) {
+      commit(engine.finishRevival(state, setId));
       update();
     },
     skipAnimation() {
@@ -208,15 +228,15 @@ export function bootstrap(root: HTMLElement): void {
     if (paused) return; // 메뉴를 닫거나 문제 화면으로 돌아오면 재생
 
     const token = ++nextToken;
-    const team = progress && state.teams.find((t) => t.id === progress.activeTeamId);
     playing = { token, runId };
     playerPaused = false;
     armWatchdog(token, kind);
 
     void player
       .play(kind, {
-        teamName: team?.name ?? '',
-        scriptureReference: state.questionSets.find((s) => s.id === team?.questionSetId)?.scriptureReference,
+        teamName: engine.activeName(state),
+        scriptureReference: engine.activeSet(state)?.scriptureReference,
+        ...(progress?.practice ? { simple: true } : {}),
         livesBefore: progress ? (kind === 'wrong' ? progress.lives + 1 : progress.lives) : 0,
         livesAfter: progress?.lives ?? 0,
       })

@@ -441,6 +441,19 @@ function wrongScene(doc: Document, ctx: PlayContext, sfx: SfxFn): Scene {
   return withFade(root, steps, DURATION.wrongCaption + DURATION.heart);
 }
 
+// ───────── 연습게임: '정답!' / '오답' 표시만 ─────────
+
+function markScene(doc: Document, kind: 'correct' | 'wrong', text: string, sfx: SfxFn): Scene {
+  const root = sceneRoot(doc, kind);
+  el(doc, 'ap-dim', root);
+  const cap = caption(doc, root, text);
+  const t = kind === 'correct' ? DURATION.correctCaption : DURATION.wrongCaption;
+  return withFade(root, [
+    { at: 0, run: () => sfx(kind) },
+    { at: t - 200, run: () => cap.classList.add('ap-hide') },
+  ], t);
+}
+
 // ───────── 천국 (픽셀 하늘 · 구름 · 빛 · 문이 열림) → 대사 ─────────
 
 function heavenScene(doc: Document, sfx: SfxFn, lite: boolean): Scene {
@@ -558,9 +571,9 @@ export function buildScene(kind: AnimationKind, doc: Document, ctx: PlayContext,
     case 'intro':
       return introChurchScene(doc, sfx, lite);
     case 'correct':
-      return correctScene(doc, sfx, lite);
+      return ctx.simple ? markScene(doc, 'correct', '정답!', sfx) : correctScene(doc, sfx, lite);
     case 'wrong':
-      return wrongScene(doc, ctx, sfx);
+      return ctx.simple ? markScene(doc, 'wrong', '오답', sfx) : wrongScene(doc, ctx, sfx);
     case 'heaven':
       return heavenScene(doc, sfx, lite);
     case 'inferno':

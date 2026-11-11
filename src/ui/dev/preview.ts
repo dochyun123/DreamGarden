@@ -80,6 +80,9 @@ const actions: UiActions = {
   returnToChallenge() { ui.view = 'question'; update(); },
   saveSetup(d) { log('saveSetup', d); ui.view = 'home'; update(); },
   startChallenge(id) { log('startChallenge', id); },
+  startPractice() { log('startPractice'); },
+  resetAll() { log('resetAll'); },
+  finishRevival(id) { log('finishRevival', id); },
   selectTrack(setId) {
     log('selectTrack', setId);
     const p = state.progress!;
